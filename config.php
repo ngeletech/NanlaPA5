@@ -1,9 +1,9 @@
 <?php
-    define('DB_HOST', '');
-    define('DB_USER', '');
+    define('DB_HOST', '127.0.0.1');
+    define('DB_USER', 'root');
     define('DB_PASS', '');
-    define('DB_NAME', '');
-    define('DB_PORT', '');
+    define('DB_NAME', 'nanla_tripistry');
+    define('DB_PORT', '3306');
 
 
     function getDBConnection(){

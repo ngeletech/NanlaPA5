@@ -137,8 +137,8 @@
             $salt = bin2hex(random_bytes(16)); //32 chars generate a random bytes and convert it to hexadecemal
             $hashedPassword = hash('sha256', $salt . $password); //adding the hexadecimal to the password and run thro
 
-            $stmt = $this->conn->prepare("INSERT INTO user (Email, Registration_Date) VALUES (?, CURDATE())");
-            $stmt->bind_param("s", $email);
+            $stmt = $this->conn->prepare("INSERT INTO user (Email, Registration_Date,hashed_password) VALUES (?, CURDATE(), ?)");
+            $stmt->bind_param("ss", $email, $hashedPassword);
             if(!$stmt->execute()){
                 $this->sendError("Registration failed: ".$stmt->error, 500);
                 return;
@@ -160,8 +160,8 @@
                 $citizenship = 'Unknown';
             
 
-                $stmt = $this->conn->prepare("INSERT INTO traveler (UserID,Passport_number, First_Name, Last_Name, Date_of_Birth, Citizenship, hashed_password) VALUES (?,?,?,?,?,?,?)");
-                $stmt->bind_param("issssss", $userID, $passport, $name, $surname, $dob, $citizenship, $hashedPassword);
+                $stmt = $this->conn->prepare("INSERT INTO traveler (UserID,Passport_number, First_Name, Last_Name, Date_of_Birth, Citizenship) VALUES (?,?,?,?,?,?)");
+                $stmt->bind_param("isssss", $userID, $passport, $name, $surname, $dob, $citizenship);
 
             } else if ($user_type === 'Travel Agency'){
                 if(!isset( $this->data['name'])  || !isset( $this->data['reg_num'])){
@@ -172,8 +172,8 @@
                 $name = $this->data['name'];
                 $reg_num = $this->data['reg_num'];
 
-                $stmt = $this->conn->prepare("INSERT INTO travel_agency (UserID, Reg_Number, Name, hashed_password) VALUES (?,?,?,?)");
-                $stmt->bind_param("iiss", $userID, $reg_num, $name, $hashedPassword);
+                $stmt = $this->conn->prepare("INSERT INTO travel_agency (UserID, Reg_Number, Name) VALUES (?,?,?)");
+                $stmt->bind_param("iis", $userID, $reg_num, $name);
             } else {
                 $this->conn->prepare("DELETE FROM user WHERE UserID = ?")->execute([$userID]);
                 $this->sendError("Invalid user type", 400);
