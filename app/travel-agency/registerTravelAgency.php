@@ -46,6 +46,6 @@
             <div id="apiResponse"></div>
         </div>
         <script src="/NanlaPA5/app/js/main.js"></script>
-        <script src="/NanlaPA5/app/js/travel-agency/register.js"></script>
+        <script src="/NanlaPA5/app/js/register.js"></script>
     </body>
 </html>

@@ -61,6 +61,6 @@
         </div>
 
         <script src="/NanlaPA5/app/js/main.js"></script>
-        <script src="/NanlaPA5/app/js/traveller/register.js"></script>
+        <script src="/NanlaPA5/app/js/register.js"></script>
     </body>
 </html>

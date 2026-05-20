@@ -66,17 +66,14 @@ document.addEventListener('DOMContentLoaded', function(){
 
 
             if(user_type === 'Traveller'){
-                setTimeout(function() {
-                    window.location.href = 'registerTraveller.php';
-                    }, 3000);
+                window.location.href = '/NanlaPA5/app/traveller/registerTraveller.php';
             } else if (user_type === 'Travel Agency'){
-                setTimeout(function() {
-                    window.location.href = 'registerTravelAgency.php';
-                    }, 3000);
+                window.location.href = '/NanlaPA5/app/travel-agency/registerTravelAgency.php';
             } 
         })
     }
 })
+
 document.addEventListener('DOMContentLoaded', function(){
         var form = document.getElementById('signupForm');
         
