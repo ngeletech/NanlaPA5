@@ -221,7 +221,7 @@
                 return;
             }
 
-            $this->sendResponse($user);
+            $this->sendResponse($user,200);
 
         }
 
@@ -264,7 +264,7 @@
             $result = $this->conn->query($sql);
             $agencies = [];
             while($row = $result->fetch_assoc()){
-                $agencies = $row;
+                $agencies[] = $row;
             }
             $this->sendResponse($agencies, 200);
             return; 
@@ -278,7 +278,7 @@
                 $result = $this->conn->query($sql);
                 $packages = [];
                 while($row = $result->fetch_assoc()){
-                    $packages = $row;
+                    $packages[] = $row;
                 }
                 $this->sendResponse($packages, 200);
                 return; 
@@ -296,7 +296,8 @@
 
             $searchDestination = "";
             if(isset($this->data['search'])){
-                $sql = $this->conn->prepare("SELECT p.Name, p.Description, p.Price, p.Start_Date FROM destination as d LEFT JOIN package_destinations as pd ON d.DestinationID = pd.DestinationID LEFT JOIN package as p on p.PackageID = pd.PackageID WHERE d.City_Name LIKE '%?%' OR d.Country_Name LIKE '%?%' or d.Continent LIKE '%?%'");
+                $searchDestination = '%'.$this->data['search'].'%';
+                $sql = $this->conn->prepare("SELECT p.Name, p.Description, p.Price, p.Start_Date FROM destination as d LEFT JOIN package_destinations as pd ON d.DestinationID = pd.DestinationID LEFT JOIN package as p on p.PackageID = pd.PackageID WHERE d.City_Name LIKE ? OR d.Country_Name LIKE ? or d.Continent LIKE ?");
                 $sql->bind_param('sss', $searchDestination, $searchDestination, $searchDestination);
                 $sql->execute();
                 $result = $sql->get_result();
@@ -317,7 +318,8 @@
             //for now just geting packages based on accomodation search
             $searchAccommodation = "";
             if(isset($this->data['search'])){
-                $sql = $this->conn->prepare("SELECT p.Name, p.Description, p.Price, p.Start_Date FROM accomodation as a LEFT JOIN package_accomodations as pa ON a.AccomodationID = pa.AccomodationID LEFT JOIN package as p on p.PackageID = pa.PackageID WHERE a.Type LIKE '%?%'");
+                $searchAccommodation = '%'.$this->data['search'].'%';
+                $sql = $this->conn->prepare("SELECT p.Name, p.Description, p.Price, p.Start_Date FROM accomodation as a LEFT JOIN package_accomodations as pa ON a.AccomodationID = pa.AccomodationID LEFT JOIN package as p on p.PackageID = pa.PackageID WHERE a.Type LIKE ?");
                 $sql->bind_param('s', $searchAccommodation);
                 $sql->execute();
                 $result = $sql->get_result();
@@ -345,7 +347,8 @@
 
             $searchDestination = "";
             if(isset($this->data['search'])){
-                $sql = $this->conn->prepare("SELECT r.Name, r.Type, r.Rating FROM restaurant as r LEFT JOIN destination as d on r.DestinationID = d.DestinationID WHERE d.City_Name LIKE '%?%'");
+                $searchDestination = '%'.$this->data['search'].'%';                
+                $sql = $this->conn->prepare("SELECT r.Name, r.Type, r.Rating FROM restaurant as r LEFT JOIN destination as d on r.DestinationID = d.DestinationID WHERE d.City_Name LIKE ?");
                 $sql->bind_param('s', $searchDestination);
                 $sql->execute();
                 $result = $sql->get_result();
