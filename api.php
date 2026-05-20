@@ -193,6 +193,36 @@
         
         //2
         private function getProfile(){
+            if(!isset($this->data['userID'])){
+                $this->sendError("Missing userID", 400);
+                return;
+            }
+
+            $userID = $this->data['userID'];
+
+            $stmt = $this->conn->prepare("SELECT u.UserID,u.Email,  u.Registration_Date, t.First_name, t.Last_Name, t.Passport_number, t.Date_of_Birth, t.Citizenship, 'Traveller' AS user_type FROM user as u JOIN traveler as t on u.UserID = t.userID WHERE u.UserID = ? ");
+            $stmt->bind_param("i", $userID);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $user = $result->fetch_assoc();
+            $stmt->close();
+
+            if(!$user){
+                $stmt = $this->conn->prepare("SELECT u.UserID, u.Email, u.Registration_Date, ta.Name, ta.Reg_Number, ta.Verification_Status, ta.Commision_rate, 'Travel Agency' AS user_type FROM user as u JOIN traveler_agency as ta on u.UserID = ta.userID WHERE u.UserID = ? ");
+                $stmt->bind_param("i", $userID);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $user = $result->fetch_assoc();
+                $stmt->close();
+            }
+
+            if (!$user) {
+                $this->sendError("User not found", 404);
+                return;
+            }
+
+            $this->sendResponse($user);
+
         }
 
 
