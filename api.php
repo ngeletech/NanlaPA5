@@ -375,12 +375,71 @@
 
         private function viewPackage(){}
         
-        private function getFlights(){}
+        private function getFlights(){
+        
+        if(isset($this->data['search'])){
+            $searchDestination = '%'.$this->data['search'].'%';
+            $sql = $this->conn->prepare("SELECT f.FlightID, f.Flight_Name, f.Departure_City, f.Arrival_City, f.Departure_Time, f.Arrival_City FROM flight as f LEFT JOIN destination as d on f.Arrival_City = d.City_Name WHERE d.Flight_Name LIKE ?");
+            $sql->bind_param('s', $searchDestination);
+            $sql->execute();
+            $result = $sql->get_result();
+            $flights = [];
+
+            while($row = $result->fetch_assoc()){
+                $flights[] = $row;
+            }
+        }
+        
+        }
 
 
-        private function getReviews(){}
+        private function getReviews(){
+            $sql = "SELECT * FROM  review";
+            $result = $this->conn->query($sql);
+            $reviews = [];
+            while($row = $result->fetch_assoc()){
+                $reviews[] = $row;
+            }
+            $this->sendResponse($reviews, 200);
+        }
 
-        private function makeReview(){}
+        private function makeReview(){
+           $review_id = trim($this->data['review_id'] ?? '');
+           $rating = trim($this->data['rating'] ?? '');
+           $comment = $this->data['comment'] ?? '';
+           $date_posted = trim($this->data['date_posted'] ?? '');
+           $package_id = trim($this->data['package_id'] ?? '');
+           $traveler_id = trim($this->data['traveler_id'] ?? '');
+           
+           if(!$review_id || !$rating || !$date_posted || !$package_id || !$traveler_id){
+               $this->sendError("Missing parameters", 400);             
+               return;
+           }
+
+           $stmt = $this->conn->prepare("SELECT TravelerID FROM traveler WHERE UserID = ?");
+           $stmt->bind_param("i", $traveler_id);
+           $stmt->execute();
+           $user = $stmt->get_result()->fetch_assoc();
+           $stmt->close();
+
+           if(!$user){
+               $this->sendError("Invalid traveler ID", 400);
+               return;
+           }
+
+           $stmt = $this->conn->prepare("INSERT INTO review (Rating, Comment, Date_Posted, PackageID, TravelerID) VALUES (?, ?, ?, ?, ?, ?)");
+           $stmt->bind_param("iissii", $rating, $comment, $date_posted, $package_id, $traveler_id);
+                if($stmt->execute()){
+                    $this->sendResponse("Review submitted successfully", 200);
+                } else {
+                    $this->sendError("Failed to submit review: " . $stmt->error, 500);
+                }
+            $stmt->close();
+
+
+
+           
+        }
 
     }
 
