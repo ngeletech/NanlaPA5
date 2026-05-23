@@ -1,5 +1,7 @@
 <?php
 
+use LDAP\Result;
+
     header("Content-Type: application/json");
     header("Access-Control-Allow-Origin: *");
     header("Access-Control-Allow-Methods: POST");
@@ -91,6 +93,42 @@
                 case 'GetReview':
                     $this->getReviews();
                     break;
+                case 'GetTravellerProfile':
+                    $this->getTravellerProfile();
+                    break;
+                case 'UpdateTravellerProfile':
+                    $this->updateTravellerProfile();
+                    break;
+                //Agency profile functions
+                    case 'GetAgencyProfile':
+                    $this->getAgencyProfile();
+                    break;
+                case 'UpdateAgencyProfile':
+                    $this->updateAgencyProfile();
+                    break;
+                case 'GetAgencyPackages':
+                    $this->getAgencyPackages();
+                    break;
+                case 'GetAgencyStats':
+                    $this->getAgencyStats();
+                    break;
+                case 'GetAgencyRecentBookings':
+                    $this->getAgencyRecentBookings();
+                    break;
+                    
+                case 'GetRecentBookings':
+                    $this->getRecentBookings();
+                    break;
+
+                case 'GetRecommendedPackages':
+                    $this->getRecommendedPackages();
+                    break;
+
+                case 'Logout':
+                    if (session_status() === PHP_SESSION_NONE)session_start();
+                    session_destroy();
+                    $this->sendResponse("Logged out", 200);
+                    break;
                 default:
                     $this->sendError("Invalid" , 400);
                     break;
@@ -123,7 +161,7 @@
                 return;
             }
 
-            $stmt = $this->conn->prepare("SELECT UserID FROM users WHERE email = ?");
+            $stmt = $this->conn->prepare("SELECT UserID FROM user WHERE Email = ?");
             $stmt->bind_param("s", $email);
             $stmt->execute();
             $stmt->store_result();
@@ -137,8 +175,8 @@
             $salt = bin2hex(random_bytes(16)); //32 chars generate a random bytes and convert it to hexadecemal
             $hashedPassword = hash('sha256', $salt . $password); //adding the hexadecimal to the password and run thro
 
-            $stmt = $this->conn->prepare("INSERT INTO user (Email, Registration_Date,hashed_password) VALUES (?, CURDATE(), ?)");
-            $stmt->bind_param("ss", $email, $hashedPassword);
+            $stmt = $this->conn->prepare("INSERT INTO user (Email, Registration_Date,hashed_password, salt) VALUES (?, CURDATE(), ?, ?)");
+            $stmt->bind_param("sss", $email, $hashedPassword, $salt);
             if(!$stmt->execute()){
                 $this->sendError("Registration failed: ".$stmt->error, 500);
                 return;
@@ -228,6 +266,7 @@
 
         //3
         private function login(){
+
             if(!isset($this->data['email']) || !isset($this->data['password'])){
                 $this->sendError("Missing parameters", 400);
                 return;
@@ -248,11 +287,60 @@
                 return;
             }
 
-            $stmt = $this->conn->prepare("SELECT UserID, name, surname, email, password, salt, api_key, type FROM users WHERE email = ?");
+            $stmt = $this->conn->prepare("SELECT UserID, Email, hashed_password, salt FROM user WHERE Email = ?");
             $stmt->bind_param("s", $email);
             $stmt->execute();
             $result = $stmt->get_result();
-            $user = $result->fetch_assoc();            
+            $user = $result->fetch_assoc();
+            $stmt->close();
+
+            if(!$user){
+                    $this->sendError("Invalid email or password",401);
+                return;
+                        
+            }
+            $hashedInput = hash('sha256', $user['salt'] . $password);
+            if($hashedInput !== $user['hashed_password']){
+                $this->sendError("Invalid email or password",401);
+                return;
+            }  
+            
+            $userID = $user['UserID'];
+
+            $stmt = $this->conn->prepare("SELECT First_Name AS name, 'Traveller' AS type FROM traveler WHERE UserID = ?");
+            $stmt->bind_param("i", $userID);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $profile = $result->fetch_assoc();
+            $stmt->close();
+
+            if(!$profile){
+                $stmt = $this->conn->prepare("SELECT Name AS name, 'Travel Agency' AS type FROM travel_agency WHERE UserID = ?");
+                $stmt->bind_param("i", $userID);
+                $stmt->execute();
+                $result = $stmt->get_result();
+                $profile = $result->fetch_assoc();
+                $stmt->close();
+            }
+
+            if(!$profile){
+                $this->sendError("User profile not found", 404);
+                return;
+            }
+
+            if(session_status() === PHP_SESSION_NONE)session_start();
+            $_SESSION['user_id'] = $userID;
+            $_SESSION['user_name'] = $profile['name'];
+            $_SESSION['user_type'] = $profile['type'] === 'Travel Agency' ? 'agency' : 'traveller';
+
+            $this->sendResponse([
+                "user" => $userID,
+                "name"=> $profile['name'],
+                "email"=> $user['Email'],
+                "type" => $profile['type']
+
+            ], 200);            
+            
         }
 
 
@@ -362,7 +450,155 @@
             }
             
         }
+        //extraFunctions
+        private function getRecentBookings() {
+            
+        }
+
+        private function getRecommendedPackages(){}
+
+        private function getTravellerProfile(){
+
+            if(session_status() === PHP_SESSION_NONE)session_start();
+            $userID = $_SESSION['user_id'] ?? null;
+
+            if (!$userID) {
+                $this->sendError("Not logged in", 401);
+                return;
+            }
+
+
+            $stmt = $this->conn->prepare("SELECT u.Email, t.First_Name AS Name, t.Last_Name AS Surname, t.Date_of_Birth, t.Citizenship FROM user AS u JOIN traveler AS t ON u.UserID = t.UserID WHERE u.UserID = ?");
+            $stmt->bind_param("i", $userID);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $profile = $result->fetch_assoc();
+            $stmt->close();
+
+            if(!$profile){
+                $this->sendError("Traveller not found", 404);
+                return;
+            }
+
+            $this->sendResponse($profile, 200);
+        }
+
+        private function updateTravellerProfile(){
+            if(!isset($this->data['userID'])){
+                $this->sendError("Missing userID", 400);
+                return;
+            }  
+            
+            $userID = $this->data['userID'];
+            $name = $this->data['name'];
+            $surname = $this->data['surname'];
+
+            if(!$name || !$surname){
+                $this->sendError("Mising name or surname", 400);
+                return;
+            }
+
+            $stmt = $this->conn->prepare("UPDATE traveler SET First_Name = ?, Last_Name = ? WHERE UserID = ?");
+            $stmt->bind_param("ssi", $name, $surname, $userID);
+
+            if ($stmt->execute()) {
+                $this->sendResponse("Profile updated succesfully", 200);
+            } else {
+                $this->sendError("Update failed: ".$stmt->error, 500);
+            }
+            $stmt->close();
+        }
         
+        
+        private function getAgencyProfile(){
+            if(session_status() === PHP_SESSION_NONE)session_start();
+            $userID = $_SESSION['user_id'] ?? null;
+
+            if (!$userID) {
+                $this->sendError("Not logged in", 401);
+                return;
+            }
+            $stmt = $this->conn->prepare("SELECT u.Email, ta.Name, ta.Reg_Number, ta.Verification_Status, ta.Commision_rate FROM user AS u JOIN travel_agency AS ta ON u.UserID = ta.UserID WHERE u.UserID = ?");
+            $stmt->bind_param("i", $userID);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $profile = $result->fetch_assoc();
+            $stmt->close();
+
+            if(!$profile){
+                $this->sendError("Agency not found", 404);
+                return;
+            }
+
+            $this->sendResponse($profile, 200);
+        }
+
+
+        private function updateAgencyProfile(){}
+
+        private function getAgencyPackages(){
+            if(!isset($this->data['userID'])){
+                $this->sendError("Missing userID", 400);
+                return;
+            }
+            $userID = $this->data['userID'];
+            $limit = isset($this->data['limit']);
+
+            $stmt = $this->conn->prepare("SELECT p.PackageID, p.Name, p.Price, COUNT(b.BookingID) as BookingCount FROM package AS p LEFT JOIN booking AS b ON p.PackageID = b.PackageID WHERE p.Travel_AgencyID = ? GROUP BY p.PackageID, p.Name, p.Price ORDER BY p.PackageID DESC LIMIT ?");
+            $stmt->bind_param("ii", $userID, $limit);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $packages = [];
+            
+            while ($row = $result->fetch_assoc()) {
+                $packages[] = $row;
+            }
+
+            $stmt->close();
+            $this->sendResponse($packages, 200);
+        }
+
+        private function getAgencyRecentBookings(){
+            if(!isset($this->data['userID'])){
+                $this->sendError("Missing userID", 400);
+                return;
+            }
+            $userID = $this->data['userID'];
+            $limit = isset($this->data['limit']);
+
+            $stmt = $this->conn->prepare("SELECT b.BookinID, p.Name AS PackageName, CONCAT(t.First_Name,' ', t.Last_Name) AS TravellerName, b.Date AS TravelDate, b.Price_paid as TotalPrice, b.status, p.PackageID FROM booking as b JOIN package AS p ON b.PackageID = p.PackageID JOIN traveller_bookings AS tb ON b.BookingID = tb.BookingID JOIN traveler AS t ON tb.TravellerID = t.UserID WHER p.Travel_AgencyID = ? ORDER BY b.Date DESC LIMIT ?");
+            $stmt->bind_param("ii", $userID, $limit);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $bookings = [];
+            while($row = $result->fetch_assoc()){
+                $bookings[] = $row;
+            }
+
+            $stmt->close();
+            $this->sendResponse($bookings, 200);
+        }
+        
+        private function getAgencyStats(){
+            if (!isset($this->data['userID'])) {
+                $this->sendError("Missing userID", 400);
+                return;
+            }
+
+            $userID = $this->data['userID'];
+            $stmt = $this->conn->prepare("SELECT COUNT(DISTINCT p.PackageID) AS total_packages, COUNT(DISTINCT b.BookingID) AS total_bookings, AVG(r.rating) AS avg_rating FROM travel_agency AS ta 
+                    LEFT JOIN package AS p ON ta.UserID = p.Travel_AgencyID LEFT JOIN bookings AS b ON ta.UserID = b.PackageID LEFT JOIN review AS r ON p.PackageID = r.PackageID WHERE ta.UserID = ?");
+            $stmt->bind_param("i", $userID);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $stats = $result->fetch_assoc();
+            $stmt->close();
+
+            $this->sendResponse($stats,200);
+        }
+
+        //end
+
         private function bookPackage(){
 
         }
