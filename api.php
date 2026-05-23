@@ -452,10 +452,32 @@ use LDAP\Result;
         }
         //extraFunctions
         private function getRecentBookings() {
+            if(session_status() === PHP_SESSION_NONE)session_start();
+            $userID = $_SESSION['user_id'] ?? null;
+
+            if (!$userID) {
+                $this->sendError("Not logged in", 401);
+                return;
+            }
+
+            $stmt = $this->conn->prepare("SELECT b.BookingID, p.Name AS PackageName, CONCAT(t.First_Name,' ', t.Last_Name) AS TravellerName, b.Date AS TravelDate, b.Price_paid as TotalPrice, b.status FROM booking as b JOIN package AS p ON b.PackageID = p.PackageID JOIN traveller_bookings AS tb ON b.BookingID = tb.BookingID JOIN traveler AS t ON tb.TravellerID = t.UserID WHERE t.UserID = ? ORDER BY b.Date DESC LIMIT 5");
+            $stmt->bind_param("i", $userID);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $bookings = [];
+            while($row = $result->fetch_assoc()){
+                $bookings[] = $row;
+            }
+
+            $stmt->close();
+            $this->sendResponse($bookings, 200);
             
         }
 
-        private function getRecommendedPackages(){}
+        private function getRecommendedPackages(){
+
+        
+        }
 
         private function getTravellerProfile(){
 
@@ -600,16 +622,174 @@ use LDAP\Result;
         //end
 
         private function bookPackage(){
+        $booking_id = trim($this->data['booking_id'] ?? '');
+        $price_paid = trim($this->data['price_paid'] ?? '');
+        $date_of_booking = trim($this->data['date_of_booking'] ?? '');
+        $package_id = trim($this->data['package_id'] ?? '');
 
+        if(!$booking_id || !$price_paid || !$date_of_booking || !$package_id){
+            $this->sendError("Missing parameters", 400);             
+            return;
         }
 
+        $stmt = $this->conn->prepare("SELECT PackageID FROM package WHERE PackageID = ?");
+        $stmt->bind_param("i", $package_id);
+        $stmt->execute();
+        $package = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        if(!$package){
+            $this->sendError("Invalid package ID", 400);
+            return;
+        }
+
+        $stmt = $this->conn->prepare("INSERT INTO booking (Price_Paid, Date_of_Booking, PackageID) VALUES (?, ?, ?)");
+        $stmt->bind_param("ssi", $price_paid, $date_of_booking, $package_id);
+            if($stmt->execute()){
+                $this->sendResponse("Package booked successfully", 200);
+            } else {
+                $this->sendError("Failed to book package: " . $stmt->error, 500);
+            }
+        $stmt->close();
+        }
+
+        
+
         private function createPackage() {
+                $travel_agency_id = trim($this->data['travel_agency_id'] ?? '');
+                $package_id = trim($this->data['package_id'] ?? '');
+                $name = $this->data['name'] ?? '';
+                $price = trim($this->data['price'] ?? '');
+                $start_date = trim($this->data['start_date'] ?? '');
+                $end_date = trim($this->data['end_date'] ?? '');
+                $description = $this->data['description'] ?? '';
+                $max_group_size = trim($this->data['max_group_size'] ?? '');
+
+                if(!$travel_agency_id){
+                    $this->sendError("Missing Travel Agency ID", 400);
+                    return;
+                }
+                if(!$name || !$price || !$start_date || !$end_date || !$max_group_size){
+                    $this->sendError("Missing parameters", 400);
+                    return;
+                }
+
+                $stmt = $this->conn->prepare("SELECT UserID FROM travel_agency WHERE UserID = ?");
+                $stmt->bind_param("i", $travel_agency_id);
+                $stmt->execute();
+                $agency = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+
+                if(!$agency){
+                    $this->sendError("Invalid Travel Agency ID", 400);
+                    return;
+                }
+                //if package already exists, return error:
+                $stmt = $this->conn->prepare("SELECT PackageID FROM package WHERE PackageID = ?");
+                $stmt->bind_param("i", $package_id);
+                $stmt->execute();
+                $package = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+
+                if($package){
+                    $this->sendError("Package already exists", 400);
+                    return;
+                }
+                //if all other parameters are the same as an existing package, return error:
+                $stmt = $this->conn->prepare("SELECT Name, Price, Start_Date, End_Date FROM package WHERE Name = ? AND Price = ? AND Start_Date = ? AND End_Date = ?");
+                $stmt->bind_param("siss", $name, $price, $start_date, $end_date);
+                $stmt->execute();
+                $existingPackage = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if($existingPackage){
+                    $this->sendError("A package with the same name, price, start date and end date already exists", 400);
+                    return;
+                }
+                //if successfully created package, return success message:
+                $stmt = $this->conn->prepare("INSERT INTO package ( Name, Description, Price, Start_Date, End_Date, Max_Group_Size, Travel_AgencyID) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                $stmt->bind_param("isssisi", $name, $description, $price, $start_date, $end_date, $max_group_size, $travel_agency_id);
+                if($stmt->execute()){
+                    $this->sendResponse("Package created successfully", 200);
+                } else {
+                    $this->sendError("Failed to create package: " . $stmt->error, 500);
+                }
+
+
         }
 
         private function updatePackage() {
+
+                $package_id = trim($this->data['package_id'] ?? '');
+                $name = $this->data['name'] ?? '';
+                $price = trim($this->data['price'] ?? '');
+                $start_date = trim($this->data['start_date'] ?? '');
+                $end_date = trim($this->data['end_date'] ?? '');
+                $description = $this->data['description'] ?? '';
+                $max_group_size = trim($this->data['max_group_size'] ?? '');
+                $travel_agency_id = trim($this->data['travel_agency_id'] ?? '');
+
+                if(!$package_id){
+                        $this->sendError("Missing Package ID", 400);
+                        return;
+                    }
+
+                $stmt = $this->conn->prepare("SELECT PackageID FROM package WHERE PackageID = ?");
+                $stmt->bind_param("i", $package_id);
+                $stmt->execute();
+                $package = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+
+                if(!$package){
+                    $this->sendError("Package not found", 400);
+                    return;
+                }
+
+                $stmt = $this->conn->prepare("SELECT UserID FROM travel_agency WHERE UserID = ?");
+                $stmt->bind_param("i", $travel_agency_id);
+                $stmt->execute();
+                $agency = $stmt->get_result()->fetch_assoc();
+                $stmt->close();
+                if(!$agency){
+                    $this->sendError("Travel Agency Does Not Exist", 400);
+                    return;
+                }
+
+
+                $stmt = $this->conn->prepare("UPDATE package SET Name = ?, Description = ?, Price = ?, Start_Date = ?, End_Date = ?, Max_Group_Size = ? WHERE PackageID = ?");
+                $stmt->bind_param("sssssii", $name, $description, $price, $start_date, $end_date, $max_group_size, $package_id);
+                if($stmt->execute()){
+                    $this->sendResponse("Package updated successfully", 200);
+                } else {
+                    $this->sendError("Failed to update package: " . $stmt->error, 500);
+                }
+                $stmt->close();
+
         }
 
-        private function viewPackage(){}
+        private function viewPackage(){
+        $package_id = trim($this->data['package_id'] ?? '');
+        
+        if(!$package_id){
+            $this->sendError("Package ID is required", 400);
+            return;
+        }
+
+        $sql = $this->conn->prepare("SELECT p.PackageID, p.Name, p.Description, p.Price, p.Start_Date, p.End_Date, p.Max_Group_Size, t.Name AS Agency_Name 
+                                      FROM package as p 
+                                      LEFT JOIN travel_agency as t on p.Travel_AgencyID = t.UserID 
+                                      WHERE p.PackageID = ?");
+        $sql->bind_param("i", $package_id);
+        $sql->execute();
+        $result = $sql->get_result();
+        $package = $result->fetch_assoc();
+        $sql->close();
+
+        if(!$package){
+            $this->sendError("Package not found", 404);
+            return;
+        }
+        }
+        
         
         private function getFlights(){
         
