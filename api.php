@@ -1,5 +1,4 @@
 <?php
-
 use LDAP\Result;
 
     header("Content-Type: application/json");
@@ -362,15 +361,16 @@ use LDAP\Result;
         private function getPackages(){
             if(session_status() === PHP_SESSION_NONE) session_start();
 
-            $destination = $this->data['destination'];
-            $minPrice = $this->data['min_price'];
-            $maxPrice = $this->data['max_price'];
-            $groupOnly = $this->data['group_only'];
-            $sort = $this->data['sort'];
+            $destination = $this->data['destination'] ?? '';
+            $minPrice = $this->data['min_price'] ?? '';
+            $maxPrice = $this->data['max_price'] ?? '';
+            $groupOnly = $this->data['group_only'] ?? 0;
+            $sort = $this->data['sort'] ?? 'price_asc';
                                                             
 
             if(!isset($this->data['search'])){
-                $sql = "SELECT p.PackageID, p.Name ,p.Description ,p.Price, t.Name FROM package as p LEFT JOIN travel_agency as t on p.Travel_AgencyID = t.UserID WHERE 1=1";
+                $sql = "SELECT p.PackageID, p.Name ,p.Description ,p.Price, t.Name AS AgencyName , COALESCE(AVG(r.Rating), 0) AS AvgRating, DATEDIFF(p.End_Date, p.Start_Date) AS Duration FROM package as p LEFT JOIN travel_agency as t on p.Travel_AgencyID = t.UserID  LEFT JOIN review AS r ON p.PackageID = r.PackageID 
+                        GROUP BY p.PackageID, p.Name, p.Description, p.Price, p.Start_Date, t.Name" ;
                 $result = $this->conn->query($sql);
                 $packages = [];
                 while($row = $result->fetch_assoc()){
@@ -613,14 +613,17 @@ use LDAP\Result;
         }
 
         private function getAgencyPackages(){
-            if(!isset($this->data['userID'])){
-                $this->sendError("Missing userID", 400);
+            if(session_status() === PHP_SESSION_NONE)session_start();
+            $userID = $_SESSION['user_id'] ?? null;
+            
+            if (!$userID) {
+                $this->sendError("Not logged in", 401);
                 return;
             }
-            $userID = $this->data['userID'];
+
             $limit = isset($this->data['limit']);
 
-            $stmt = $this->conn->prepare("SELECT p.PackageID, p.Name, p.Price, COUNT(b.BookingID) as BookingCount FROM package AS p LEFT JOIN booking AS b ON p.PackageID = b.PackageID WHERE p.Travel_AgencyID = ? GROUP BY p.PackageID, p.Name, p.Price ORDER BY p.PackageID DESC LIMIT ?");
+            $stmt = $this->conn->prepare("SELECT p.PackageID, p.Name, p.Price, p.Start_Date, p.End_Date, p.Max_Group_Size, DATEDIFF(p.End_Date, p.Start_Date) AS Duration, COALESCE(AVG(r.Rating), 0) AS AvgRating, COUNT(b.BookingID) as BookingCount FROM package AS p LEFT JOIN booking AS b ON p.PackageID = b.PackageID LEFT JOIN review AS r ON p.PackageID = r.PackageID WHERE p.Travel_AgencyID = ? GROUP BY p.PackageID, p.Name, p.Price  p.Start_Date,  p.End_Date, p.Max_Group_Size, ORDER BY p.PackageID DESC LIMIT ?");
             $stmt->bind_param("ii", $userID, $limit);
             $stmt->execute();
             $result = $stmt->get_result();
@@ -676,35 +679,66 @@ use LDAP\Result;
         //end
 
         private function bookPackage(){
-            $booking_id = trim($this->data['booking_id'] ?? '');
-        $price_paid = trim($this->data['price_paid'] ?? '');
-        $date_of_booking = trim($this->data['date_of_booking'] ?? '');
-        $package_id = trim($this->data['package_id'] ?? '');
+            if(session_status() === PHP_SESSION_NONE) session_start();
+            $userID = $_SESSION['user_id'];
 
-        if(!$booking_id || !$price_paid || !$date_of_booking || !$package_id){
-            $this->sendError("Missing parameters", 400);             
-            return;
-        }
-
-        $stmt = $this->conn->prepare("SELECT PackageID FROM package WHERE PackageID = ?");
-        $stmt->bind_param("i", $package_id);
-        $stmt->execute();
-        $package = $stmt->get_result()->fetch_assoc();
-        $stmt->close();
-
-        if(!$package){
-            $this->sendError("Invalid package ID", 400);
-            return;
-        }
-
-        $stmt = $this->conn->prepare("INSERT INTO booking (Price_Paid, Date_of_Booking, PackageID) VALUES (?, ?, ?)");
-        $stmt->bind_param("ssi", $price_paid, $date_of_booking, $package_id);
-            if($stmt->execute()){
-                $this->sendResponse("Package booked successfully", 200);
-            } else {
-                $this->sendError("Failed to book package: " . $stmt->error, 500);
+            if(!$userID){
+                $this->sendError("Not logged in", 401);
+                return;
             }
-        $stmt->close();
+
+
+            $price_paid = trim($this->data['price_paid'] ?? '');
+            $date = trim($this->data['date'] ?? '');
+            $package_id = trim($this->data['package_id'] ?? '');
+
+            if( !$price_paid || !$date || !$package_id){
+                $this->sendError("Missing parameters", 400);             
+                return;
+            }
+
+            $stmt = $this->conn->prepare("SELECT PackageID, Price FROM package WHERE PackageID = ?");
+            $stmt->bind_param("i", $package_id);
+            $stmt->execute();
+            $package = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            if(!$package){
+                $this->sendError("Package not found", 404);
+                return;
+            }
+
+            $stmt = $this->conn->prepare("SELECT UserID FROM traveler WHERE UserID = ?");
+            $stmt->bind_param("i", $userID);
+            $stmt->execute();
+            $traveller = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            if(!$traveller){
+                $this->sendError("Only travellers can book packages", 403);
+                return;
+            }
+
+
+
+            $stmt = $this->conn->prepare("INSERT INTO booking (Price_Paid, Date_of_Booking, PackageID) VALUES (?, ?, ?)");
+            $stmt->bind_param("isi", $price_paid, $date, $package_id);
+                if(!$stmt->execute()){
+                    $this->sendError("Failed to book package: " . $stmt->error, 500);
+                }
+            $bookingID = $this->conn->insert_id;
+            $stmt->close();
+
+            $stmt = $this->conn->prepare("INSERT INTO traveller_bookings (TravellerID, BookingID) VALUES (?,?)");
+            $stmt->bind_param("ii", $userID, $bookingID);
+            if(!$stmt->execute()){
+                $this->conn->prepare("DELETE FROM booking WHERE BookingID = ?")->bind_param("i", $bookingID);
+                $this->sendError("Failed to link booking" . $stmt->error, 500);
+                return;
+            }
+
+            $stmt->close();
+            $this->sendResponse(["BookingID" => $bookingID], 200);
         }
 
         private function createPackage() {
@@ -814,28 +848,161 @@ use LDAP\Result;
                 $stmt->close();
         }
 
-        private function viewPackage(){
-            $package_id = trim($this->data['package_id'] ?? '');
+        private function deletePackage(){
+            if(session_status() === PHP_SESSION_NONE) session_start();
+            $userID = $_SESSION['user_id'];
+
+            if(!$userID){
+                $this->sendError("Not logged in", 401);
+                return;
+            }
+
+            $packageID = $this->data['package_id'];
+            if(!$packageID){
+                $this->sendError("Missing package ID", 400);
+                return;
+            }
+
+
+            $stmt = $this->conn->prepare("SELECT PackageID FROM package WHERE PackageID = ? AND Travel_AgencyID = ?");
+            $stmt->bind_param("ii", $packageID, $userID);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $package = $result->fetch_assoc();
+            $stmt->close();
+
+            if(!$package){
+                $this->sendError("Package not found or you do not have permission to delete this package", 404);
+                return;
+            }
+
+            $stmt = $this->conn->prepare("DELETE FROM package WHERE PackageID = ?");
+            $stmt->bind_param("i", $packageID);
+            if(!$stmt->execute()){
+                $this->sendError("Failed to delete package" . $stmt->error, 500);
+                return;
+            } 
+
+            $stmt->close();
+            $this->sendResponse("Package Deleted successfully", 200 );
+        }
         
-        if(!$package_id){
-            $this->sendError("Package ID is required", 400);
-            return;
-        }
+        private function viewPackage() {
+            $package_id = trim($this->data['package_id'] ?? '');
 
-        $sql = $this->conn->prepare("SELECT p.PackageID, p.Name, p.Description, p.Price, p.Start_Date, p.End_Date, p.Max_Group_Size, t.Name AS Agency_Name 
-                                      FROM package as p 
-                                      LEFT JOIN travel_agency as t on p.Travel_AgencyID = t.UserID 
-                                      WHERE p.PackageID = ?");
-        $sql->bind_param("i", $package_id);
-        $sql->execute();
-        $result = $sql->get_result();
-        $package = $result->fetch_assoc();
-        $sql->close();
+            if (!$package_id) {
+                $this->sendError("Package ID is required", 400);
+                return;
+            }
 
-        if(!$package){
-            $this->sendError("Package not found", 404);
-            return;
-        }
+            // main package
+            $stmt = $this->conn->prepare(
+                "SELECT p.PackageID, p.Name, p.Description, p.Price,
+                        p.Start_Date, p.End_Date, p.Max_Group_Size,
+                        DATEDIFF(p.End_Date, p.Start_Date) AS Duration,
+                        t.Name AS AgencyName,
+                        COALESCE(AVG(r.Rating), 0) AS AvgRating,
+                        COUNT(DISTINCT r.ReviewID) AS ReviewCount
+                FROM package AS p
+                LEFT JOIN travel_agency AS t ON p.Travel_AgencyID = t.UserID
+                LEFT JOIN review AS r ON p.PackageID = r.PackageID
+                WHERE p.PackageID = ?
+                GROUP BY p.PackageID, p.Name, p.Description, p.Price,
+                        p.Start_Date, p.End_Date, p.Max_Group_Size, t.Name"
+            );
+            $stmt->bind_param("i", $package_id);
+            $stmt->execute();
+            $package = $stmt->get_result()->fetch_assoc();
+            $stmt->close();
+
+            if (!$package) {
+                $this->sendError("Package not found", 404);
+                return;
+            }
+
+            // destinations
+            $stmt = $this->conn->prepare(
+                "SELECT d.DestinationID, d.City_Name, d.Country_Name, d.Continent
+                FROM destination AS d
+                JOIN package_destinations AS pd ON d.DestinationID = pd.DestinationID
+                WHERE pd.PackageID = ?"
+            );
+            $stmt->bind_param("i", $package_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $destinations = [];
+            while ($row = $result->fetch_assoc()) $destinations[] = $row;
+            $stmt->close();
+
+            // flights
+            $stmt = $this->conn->prepare(
+                "SELECT f.FlightID, f.Flight_Name, f.Departure_City,
+                        f.Arrival_City, f.Departure_Date, f.Departure_Time, f.Duration
+                FROM flight AS f
+                JOIN package_flights AS pf ON f.FlightID = pf.FlightID
+                WHERE pf.PackageID = ?"
+            );
+            $stmt->bind_param("i", $package_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $flights = [];
+            while ($row = $result->fetch_assoc()) $flights[] = $row;
+            $stmt->close();
+
+            // accommodations
+            $stmt = $this->conn->prepare(
+                "SELECT a.AccomodationID, a.Name, a.Type,
+                        a.Check_in_time, a.Check_out_time
+                FROM accomodation AS a
+                JOIN package_accomodations AS pa ON a.AccomodationID = pa.AccomodationID
+                WHERE pa.PackageID = ?"
+            );
+            $stmt->bind_param("i", $package_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $accommodations = [];
+            while ($row = $result->fetch_assoc()) $accommodations[] = $row;
+            $stmt->close();
+
+            // attractions
+            $stmt = $this->conn->prepare(
+                "SELECT a.AttractionID, a.Name, a.Accessibility_Rating,
+                        a.Popularity_Rating, a.Opening_Time, a.Closing_Time
+                FROM attractions AS a
+                JOIN package_attractions AS pat ON a.AttractionID = pat.AttractionID
+                WHERE pat.PackageID = ?"
+            );
+            $stmt->bind_param("i", $package_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $attractions = [];
+            while ($row = $result->fetch_assoc()) $attractions[] = $row;
+            $stmt->close();
+
+            // restaurants via destination
+            $stmt = $this->conn->prepare(
+                "SELECT DISTINCT r.RestaurantID, r.Name, r.Type,
+                        r.Rating, r.is_vegan, r.is_halaal
+                FROM restaurant AS r
+                JOIN destination AS d ON r.DestinationID = d.DestinationID
+                JOIN package_destinations AS pd ON d.DestinationID = pd.DestinationID
+                WHERE pd.PackageID = ?"
+            );
+            $stmt->bind_param("i", $package_id);
+            $stmt->execute();
+            $result = $stmt->get_result();
+            $restaurants = [];
+            while ($row = $result->fetch_assoc()) $restaurants[] = $row;
+            $stmt->close();
+
+            $this->sendResponse([
+                'package'        => $package,
+                'destinations'   => $destinations,
+                'flights'        => $flights,
+                'accommodations' => $accommodations,
+                'attractions'    => $attractions,
+                'restaurants'    => $restaurants
+            ], 200);
         }
         
         private function getFlights(){
