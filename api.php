@@ -473,10 +473,27 @@ use LDAP\Result;
             $this->sendResponse($bookings, 200);
             
         }
-
+        //this recommendation systems is budget based, it recommends packages that are within 20% of the users average spending on packages.
         private function getRecommendedPackages(){
-
-        
+            $travelerID = $this->data['traveler_id'] ?? null;
+            if (!$travelerID) {
+                $this->sendError("Missing traveler ID", 400);
+                return;
+            }
+            $sql = $this->conn->prepare("SELECT * FROM package WHERE Price BETWEEN (SELECT AVG(Price_Paid) * 0.8 FROM booking WHERE UserID = ?) AND (SELECT AVG(Price_Paid) * 1.2 FROM booking WHERE UserID = ?) AND PackageID NOT IN (SELECT PackageID FROM booking WHERE UserID = ?) LIMIT 3");
+            $sql->bind_param("iii", $travelerID, $travelerID, $travelerID);
+            $sql->execute();
+            $result = $sql->get_result();
+            $packages = [];
+            while($row = $result->fetch_assoc()){
+                $packages[] = $row;
+            }
+            if(empty($packages)){
+                $this->sendError("No recommendations available at this time", 404);
+                return;
+            }
+            
+            $this->sendResponse($packages, 200);
         }
 
         private function getTravellerProfile(){
@@ -556,7 +573,37 @@ use LDAP\Result;
         }
 
 
-        private function updateAgencyProfile(){}
+        private function updateAgencyProfile(){
+            if(!isset($this->data['userID'])){
+                $this->sendError("Missing userID", 400);
+                return;
+            }  
+            
+            $userID              = $this->data['userID'];
+            $name                = trim($this->data['name'] ?? '');
+            $verification_status = trim($this->data['verification_status'] ?? '');
+            $commission_rate     = trim($this->data['commission_rate'] ?? '');
+
+
+            if ($name === '' || $verification_status === '' || $commission_rate === '') {
+                $this->sendError("Missing name or verification status or commission rate", 400);
+                return;
+            }
+            //I don't know of ngele will do a dropdown for this, but this is for safety checking
+            if($verification_status !== 'Verified' && $verification_status !== 'Rejected'){
+                $this->sendError("Invalid verification status", 400);
+                return;
+            }
+            
+            $stmt = $this->conn->prepare("UPDATE travel_agency SET Name = ?, Verification_Status = ?, Commision_rate = ? WHERE UserID = ?");
+            $stmt->bind_param('ssii', $name, $verification_status, $commission_rate, $userID);
+            if ($stmt->execute()) {
+                $this->sendResponse("Profile updated succesfully", 200);
+            } else {
+                $this->sendError("Update failed: ".$stmt->error, 500);
+            }
+            $stmt->close();
+        }
 
         private function getAgencyPackages(){
             if(!isset($this->data['userID'])){
@@ -793,7 +840,7 @@ use LDAP\Result;
         
         private function getFlights(){
         
-        if(isset($this->data['search'])){
+        /*if(isset($this->data['search'])){
             $searchDestination = '%'.$this->data['search'].'%';
             $sql = $this->conn->prepare("SELECT f.FlightID, f.Flight_Name, f.Departure_City, f.Arrival_City, f.Departure_Time, f.Arrival_City FROM flight as f LEFT JOIN destination as d on f.Arrival_City = d.City_Name WHERE d.Flight_Name LIKE ?");
             $sql->bind_param('s', $searchDestination);
@@ -804,7 +851,7 @@ use LDAP\Result;
             while($row = $result->fetch_assoc()){
                 $flights[] = $row;
             }
-        }
+        }*/
         
         }
 
