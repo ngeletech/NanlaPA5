@@ -360,6 +360,14 @@ use LDAP\Result;
 
         //5
         private function getPackages(){
+            if(session_status() === PHP_SESSION_NONE) session_start();
+
+            $destination = $this->data['destination'];
+            $minPrice = $this->data['min_price'];
+            $maxPrice = $this->data['max_price'];
+            $groupOnly = $this->data['group_only'];
+            $sort = $this->data['sort'];
+                                                            
 
             if(!isset($this->data['search'])){
                 $sql = "SELECT p.PackageID, p.Name ,p.Description ,p.Price, t.Name FROM package as p LEFT JOIN travel_agency as t on p.Travel_AgencyID = t.UserID WHERE 1=1";
@@ -471,9 +479,8 @@ use LDAP\Result;
 
             $stmt->close();
             $this->sendResponse($bookings, 200);
-            
         }
-        //this recommendation systems is budget based, it recommends packages that are within 20% of the users average spending on packages.
+
         private function getRecommendedPackages(){
             $travelerID = $this->data['traveler_id'] ?? null;
             if (!$travelerID) {
@@ -669,7 +676,7 @@ use LDAP\Result;
         //end
 
         private function bookPackage(){
-        $booking_id = trim($this->data['booking_id'] ?? '');
+            $booking_id = trim($this->data['booking_id'] ?? '');
         $price_paid = trim($this->data['price_paid'] ?? '');
         $date_of_booking = trim($this->data['date_of_booking'] ?? '');
         $package_id = trim($this->data['package_id'] ?? '');
@@ -700,10 +707,8 @@ use LDAP\Result;
         $stmt->close();
         }
 
-        
-
         private function createPackage() {
-                $travel_agency_id = trim($this->data['travel_agency_id'] ?? '');
+            $travel_agency_id = trim($this->data['travel_agency_id'] ?? '');
                 $package_id = trim($this->data['package_id'] ?? '');
                 $name = $this->data['name'] ?? '';
                 $price = trim($this->data['price'] ?? '');
@@ -760,13 +765,10 @@ use LDAP\Result;
                 } else {
                     $this->sendError("Failed to create package: " . $stmt->error, 500);
                 }
-
-
         }
 
         private function updatePackage() {
-
-                $package_id = trim($this->data['package_id'] ?? '');
+            $package_id = trim($this->data['package_id'] ?? '');
                 $name = $this->data['name'] ?? '';
                 $price = trim($this->data['price'] ?? '');
                 $start_date = trim($this->data['start_date'] ?? '');
@@ -810,11 +812,10 @@ use LDAP\Result;
                     $this->sendError("Failed to update package: " . $stmt->error, 500);
                 }
                 $stmt->close();
-
         }
 
         private function viewPackage(){
-        $package_id = trim($this->data['package_id'] ?? '');
+            $package_id = trim($this->data['package_id'] ?? '');
         
         if(!$package_id){
             $this->sendError("Package ID is required", 400);
@@ -837,10 +838,9 @@ use LDAP\Result;
         }
         }
         
-        
         private function getFlights(){
         
-        /*if(isset($this->data['search'])){
+        if(isset($this->data['search'])){
             $searchDestination = '%'.$this->data['search'].'%';
             $sql = $this->conn->prepare("SELECT f.FlightID, f.Flight_Name, f.Departure_City, f.Arrival_City, f.Departure_Time, f.Arrival_City FROM flight as f LEFT JOIN destination as d on f.Arrival_City = d.City_Name WHERE d.Flight_Name LIKE ?");
             $sql->bind_param('s', $searchDestination);
@@ -851,14 +851,25 @@ use LDAP\Result;
             while($row = $result->fetch_assoc()){
                 $flights[] = $row;
             }
-        }*/
+        }
+
+        $this->sendResponse($flights, 200);
         
         }
 
 
         private function getReviews(){
-            $sql = "SELECT * FROM  review";
-            $result = $this->conn->query($sql);
+            if(!isset($this->data['package_id'])){
+                $this->sendError("Missing package ID", 400);
+                return;
+            }
+
+            $packageID = $this->data['package_id'];
+
+            $sql = $this->conn->prepare("SELECT * FROM  review WHERE PackageID = ?");
+            $sql->bind_param("i", $packageID);
+            $sql->execute();
+            $result = $sql->get_result();
             $reviews = [];
             while($row = $result->fetch_assoc()){
                 $reviews[] = $row;
