@@ -122,7 +122,13 @@ use LDAP\Result;
                 case 'GetRecommendedPackages':
                     $this->getRecommendedPackages();
                     break;
-
+                //GroupTrips
+                case 'DeleteGroupTrip':
+                    $this->deleteGroupTrip();
+                    break;  
+                case 'UpdateGroupTrip':
+                    $this->UpdateGroupTrip();
+                    break;      
                 case 'Logout':
                     if (session_status() === PHP_SESSION_NONE)session_start();
                     session_destroy();
@@ -1081,8 +1087,100 @@ use LDAP\Result;
 
            
         }
+        private function DeleteGroupTrip(){
+        if(session_status() === PHP_SESSION_NONE) session_start();
+        $userID = $_SESSION['user_id'] ?? null;
 
+        if(!$userID){
+            $this->sendError("Not logged in", 401);
+            return;
+        }
+
+        $groupTripID = trim($this->data['group_trip_id'] ?? '');
+        if(!$groupTripID){
+            $this->sendError("Missing group trip ID", 400);
+            return;
+        }
+
+        $stmt = $this->conn->prepare("SELECT PackageID FROM group_trip WHERE GroupID = ?");
+        $stmt->bind_param("i", $groupTripID);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $groupTrip = $result->fetch_assoc();
+        $stmt->close();
+
+        if(!$groupTrip){
+            $this->sendError("Group trip not found", 404);
+            return;
+        }
+
+        //Delete from booking table where PackageID matches the PackageID of the group trip being deleted
+        $stmt = $this->conn->prepare("DELETE b FROM booking as b JOIN group_trip as g ON b.PackageID = g.PackageID WHERE g.GroupID = ?");
+        $stmt->bind_param("i", $groupTripID);
+        if(!$stmt->execute()){
+            $this->sendError("Failed to delete related bookings: " . $stmt->error, 500);
+            $stmt->close();
+            return;
+        }
+        $stmt->close();
+
+        //Delete the main record from group_trip
+        $stmt = $this->conn->prepare("DELETE FROM group_trip WHERE GroupID = ?");
+        $stmt->bind_param("i", $groupTripID);
+        if(!$stmt->execute()){
+            $this->sendError("Failed to delete group trip: " . $stmt->error, 500);
+            $stmt->close();
+            return;
+        }
+        $stmt->close();
+
+        //delete from traveller_group_trip where GroupID matches the group trip being deleted
+        $stmt = $this->conn->prepare("DELETE FROM traveller_grouptrips WHERE GroupID = ?");
+        $stmt->bind_param("i", $groupTripID);
+        if(!$stmt->execute()){
+            $this->sendError("Failed to delete related traveller-group trip entries: " . $stmt->error, 500);
+            $stmt->close();
+            return;
+        }
+        $stmt->close();
+
+        $this->sendResponse("Group trip and its related bookings deleted successfully", 200);
     }
+
+    private function UpdateGroupTrip(){
+        $groupTripID      = trim($this->data['group_trip_id'] ?? '');
+        $travel_agency_id = trim($this->data['travel_agency_id'] ?? '');
+        $package_id       = trim($this->data['package_id'] ?? '');
+    
+        if(!$groupTripID || !$travel_agency_id || !$package_id){
+            $this->sendError("Missing group trip ID, travel agency ID, or package ID", 400);
+            return;
+        }
+
+        $stmt = $this->conn->prepare("SELECT GroupID FROM group_trip WHERE GroupID = ?"); 
+        $stmt->bind_param("i", $groupTripID);
+        $stmt->execute();
+        $exists = $stmt->get_result()->fetch_assoc();
+        $stmt->close();
+
+        if(!$exists) {
+            $this->sendError("Group trip not found", 404);
+            return;
+        }
+
+        $sql = $this->conn->prepare("UPDATE group_trip SET PackageID = ?, Travel_AgencyID = ? WHERE GroupID = ?");
+        $sql->bind_param("iii", $package_id, $travel_agency_id, $groupTripID);
+        
+        if($sql->execute()){
+            $this->sendResponse("Group trip updated successfully", 200);
+        } else {
+            $this->sendError("Failed to update group trip: " . $sql->error, 500);
+        }
+        $sql->close();
+    }
+    }
+    
+    
 
     $json = file_get_contents("php://input");
     $data = json_decode($json, true);
