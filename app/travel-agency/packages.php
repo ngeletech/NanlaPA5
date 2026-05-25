@@ -58,6 +58,6 @@ require_once '../header.php';
 </main>
 
 <?php
-$pageScript = '/NanlaPA5/app/js/agency/packages.js';
+$pageScript = '/NanlaPA5/app/js/travel-agency/packages.js';
 require_once '../footer.php';
 ?>

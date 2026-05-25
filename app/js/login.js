@@ -25,7 +25,7 @@ document.addEventListener('DOMContentLoaded', function(){
             }
 
             if(isValid){
-                var submitBtn = document.querySelector('.btn');
+                var submitBtn = document.querySelector('.btn-primary');
                 submitBtn.disabled = true;
                 submitBtn.textContent = 'Logging in...';
 
@@ -38,9 +38,9 @@ document.addEventListener('DOMContentLoaded', function(){
                 makeRequest(apiReq, function(result){
                     if(result.status === 'success'){
 
-                        localStorage.setItem('apikey', result.data.apikey);
+                        localStorage.setItem('userID', result.data.user)
                         localStorage.setItem('userName', result.data.name);
-                        localStorage.setItem('userType', result.data.type);
+                        localStorage.setItem('userEmail', result.data.email);
 
                         document.getElementById('apiResponse').innerHTML = 
                             '<div class="success-message">' +
@@ -48,14 +48,18 @@ document.addEventListener('DOMContentLoaded', function(){
                             '</div>';
 
                             setTimeout(function(){
-                                window.location.href = 'index.php';
+                                if (result.data.type === 'Travel Agency') {
+                                    window.location.href = '/NanlaPA5/app/travel-agency/profile.php';
+                                } else {
+                                    window.location.href = '/NanlaPA5/app/traveller/profile.php';
+                                }
                             }, 1500);
                     } else {
                         document.getElementById('apiResponse').innerHTML = 
                             '<div class="">' +
                                 '<p>' + result.data + '</p>' +
                             '</div>';
-                        submitBtn.disabled = false;
+                        submitBtn.disabled = true;
                         submitBtn.textContent = 'Login';
                     }
                 });

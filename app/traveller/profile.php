@@ -19,7 +19,7 @@ require_once '../header.php';
             <div class="col col-profile">
                 <div class="section">
                     <div class="section-header">
-                        <h2 class="section-title">Profile settings</h2>
+                        <h2 class="section-title">Profile details</h2>
                     </div>
                     <div id="profile-error" class="error-banner" style="display:none;"></div>
                     <div id="profile-success" class="success-banner" style="display:none;"></div>
@@ -56,6 +56,6 @@ require_once '../header.php';
 </main>
 
 <?php
-$pageScript = 'js/traveller/profile.js';
+$pageScript = '/NanlaPA5/app/js/traveller/profile.js';
 require_once '../footer.php';
 ?>

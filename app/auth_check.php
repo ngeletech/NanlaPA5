@@ -6,26 +6,26 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 function requireLogin() {
-    /*if (!isset($_SESSION['user_id'])) {
-        header('Location: /login.php');
+    if (!isset($_SESSION['user_id'])) {
+        header('Location: /NanlaPA5/app/login.php');
         exit();
-    }*/
+    }
 }
 
 function requireTraveller() {
-    /*requireLogin();
+    requireLogin();
     if ($_SESSION['user_type'] !== 'traveller') {
-        header('Location: /login.php');
+        header('Location: /NanlaPA5/app/login.php');
         exit();
-    }*/
+    }
 }
 
 function requireAgency() {
-   /* requireLogin();
+    requireLogin();
     if ($_SESSION['user_type'] !== 'agency') {
-        header('Location: /login.php');
+        header('Location: /NanlaPA5/app/login.php');
         exit();
-    }*/
+    }
 }
 
 function isLoggedIn() {

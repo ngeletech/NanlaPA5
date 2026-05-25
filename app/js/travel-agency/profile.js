@@ -1,199 +1,133 @@
 // profile.js - Agency profile and dashboard
-document.addEventListener('DOMContentLoaded', function() {
+document.addEventListener('DOMContentLoaded', function () {
     loadAgencyProfile();
     loadAgencyStats();
     loadRecentBookings();
     loadPackagesPreview();
-    
     setAgencyGreeting();
 });
 
 function setAgencyGreeting() {
     var greetingEl = document.getElementById('agency-greeting');
     if (!greetingEl) return;
-    
+
     var agencyName = localStorage.getItem('userName') || 'Agency';
     greetingEl.textContent = 'Welcome back, ' + agencyName;
 }
 
+// Profile
 function loadAgencyProfile() {
     var container = document.getElementById('profile-container');
     if (!container) return;
-    
+
     container.innerHTML = '<div class="loading">Loading profile...</div>';
-    
-    makeRequest({ type: 'GetAgencyProfile' }, function(result) {
+
+    makeRequest({ type: 'GetAgencyProfile' }, function (result) {
         if (result.status === 'success' && result.data) {
-            displayAgencyProfile(result.data);
+            displayProfileForm(result.data);
         } else {
-            container.innerHTML = '<div class="error">Failed to load profile</div>';
+            container.innerHTML = '<div class="error-banner">Failed to load profile.</div>';
         }
     });
 }
 
-function displayAgencyProfile(profile) {
+function displayProfileForm(profile) {
     var container = document.getElementById('profile-container');
     if (!container) return;
-    
-    var nameValue = profile.Name || '';
-    var regValue = profile.Registration_Number || '';
-    var emailValue = profile.Email || '';
-    var phoneValue = profile.Phone || '';
-    var descValue = profile.Description || '';
-    
-    var html = '<form id="profileForm" class="profile-form">'
-        + '<div class="form-group">'
-        + '<label for="name">Agency Name</label>'
-        + '<input type="text" id="name" name="name" value="' + escHtml(nameValue) + '" class="form-control">'
-        + '<span class="field-error" id="name-error"></span>'
-        + '</div>'
-        + '<div class="form-group">'
-        + '<label for="reg_number">Registration Number</label>'
-        + '<input type="text" id="reg_number" name="reg_number" value="' + escHtml(regValue) + '" class="form-control" readonly>'
-        + '<small class="form-text">Registration number cannot be changed</small>'
-        + '</div>'
-        + '<div class="form-group">'
-        + '<label for="email">Email</label>'
-        + '<input type="email" id="email" name="email" value="' + escHtml(emailValue) + '" class="form-control" readonly>'
-        + '</div>'
-        + '<div class="form-group">'
-        + '<label for="phone">Phone Number</label>'
-        + '<input type="tel" id="phone" name="phone" value="' + escHtml(phoneValue) + '" class="form-control">'
-        + '</div>'
-        + '<div class="form-group">'
-        + '<label for="description">Agency Description</label>'
-        + '<textarea id="description" name="description" rows="3" class="form-control">' + escHtml(descValue) + '</textarea>'
-        + '</div>'
-        + '<div class="form-actions">'
-        + '<button type="submit" class="btn-primary">Save Changes</button>'
-        + '</div>'
-        + '</form>';
-    
-    container.innerHTML = html;
-    
-    var form = document.getElementById('profileForm');
-    if (form) {
-        form.addEventListener('submit', function(e) {
-            e.preventDefault();
-            updateAgencyProfile();
-        });
-    }
+
+    container.innerHTML =
+        '<div class="form-group">' +
+            '<label>Agency Name</label>' +
+            '<input type="text" class="form-control" value="' + escHtml(profile.Name || '') + '" readonly>' +
+        '</div>' +
+        '<div class="form-group">' +
+            '<label>Registration Number</label>' +
+            '<input type="text" class="form-control" value="' + escHtml(profile.Reg_Number || '') + '" readonly>' +
+        '</div>' +
+        '<div class="form-group">' +
+            '<label>Email</label>' +
+            '<input type="email" class="form-control" value="' + escHtml(profile.Email || '') + '" readonly>' +
+        '</div>';
 }
 
-function updateAgencyProfile() {
-    var name = document.getElementById('name').value.trim();
-    var phone = document.getElementById('phone').value.trim();
-    var description = document.getElementById('description').value.trim();
-    var isValid = true;
-    
-    var nameError = document.getElementById('name-error');
-    if (nameError) nameError.innerText = '';
-    
-    if (!name) {
-        if (nameError) nameError.innerText = 'Agency name is required';
-        isValid = false;
-    }
-    
-    if (!isValid) return;
-    
-    var submitBtn = document.querySelector('#profileForm button[type="submit"]');
-    if (submitBtn) {
-        submitBtn.disabled = true;
-        submitBtn.textContent = 'Saving...';
-    }
-    
-    makeRequest({
-        type: 'UpdateAgencyProfile',
-        name: name,
-        phone: phone,
-        description: description
-    }, function(result) {
-        if (result.status === 'success') {
-            showSuccess('Profile updated successfully!');
-            localStorage.setItem('userName', name);
-            setAgencyGreeting();
-        } else {
-            showError('Failed to update: ' + (result.data || 'Unknown error'));
-        }
-        if (submitBtn) {
-            submitBtn.disabled = false;
-            submitBtn.textContent = 'Save Changes';
-        }
-    });
-}
-
+// Stats
 function loadAgencyStats() {
-    makeRequest({ type: 'GetAgencyStats' }, function(result) {
+    makeRequest({ type: 'GetAgencyStats' }, function (result) {
+        var statPackages = document.getElementById('stat-packages');
+        var statBookings = document.getElementById('stat-bookings');
+        var statRating = document.getElementById('stat-rating');
+        var statGroupTrips = document.getElementById('stat-group-trips');
+
         if (result.status === 'success' && result.data) {
-            var statPackages = document.getElementById('stat-packages');
-            var statBookings = document.getElementById('stat-bookings');
-            var statGroupTrips = document.getElementById('stat-group-trips');
-            var statRating = document.getElementById('stat-rating');
-            
             if (statPackages) statPackages.textContent = result.data.total_packages || 0;
             if (statBookings) statBookings.textContent = result.data.total_bookings || 0;
+            if (statRating) statRating.textContent = (result.data.avg_rating || 0).toFixed(1) + ' ★';
             if (statGroupTrips) statGroupTrips.textContent = result.data.total_group_trips || 0;
-            
-            var rating = parseFloat(result.data.avg_rating || 0).toFixed(1);
-            if (statRating) statRating.textContent = rating + ' ★';
+        } else {
+            if (statPackages) statPackages.textContent = '—';
+            if (statBookings) statBookings.textContent = '—';
+            if (statRating) statRating.textContent = '—';
+            if (statGroupTrips) statGroupTrips.textContent = '—';
         }
     });
 }
 
+// Recent bookings
 function loadRecentBookings() {
     var container = document.getElementById('recent-bookings-container');
     if (!container) return;
-    
-    makeRequest({ type: 'GetAgencyRecentBookings', limit: 5 }, function(result) {
-        if (result.status === 'success' && result.data && result.data.length > 0) {
-            displayAgencyRecentBookings(result.data);
+
+    makeRequest({ type: 'GetAgencyRecentBookings', limit: 5 }, function (result) {
+        if (result.status === 'success' && result.data && result.data.length) {
+            displayRecentBookings(result.data);
         } else {
             container.innerHTML = '<div class="empty-state">No recent bookings yet.</div>';
         }
     });
 }
 
-function displayAgencyRecentBookings(bookings) {
+function displayRecentBookings(bookings) {
     var container = document.getElementById('recent-bookings-container');
     if (!container) return;
-    
-    var html = '<table class="data-table">'
-        + '<thead>'
-        + '<tr>'
-        + '<th>Package</th>'
-        + '<th>Traveller</th>'
-        + '<th>Date</th>'
-        + '<th>Travellers</th>'
-        + '<th>Total</th>'
-        + '<th>Status</th>'
-        + '</tr>'
-        + '</thead><tbody>';
-    
-    for (var i = 0; i < bookings.length; i++) {
-        var b = bookings[i];
-        var total = parseFloat(b.TotalPrice || 0).toLocaleString('en-ZA');
-        var statusClass = (b.Status === 'confirmed') ? 'status-confirmed' : 'status-pending';
-        
-        html += '<tr>'
-            + '<td>' + escHtml(b.PackageName) + '</td>'
-            + '<td>' + escHtml(b.TravellerName) + '</td>'
-            + '<td>' + b.TravelDate + '</td>'
-            + '<td>' + b.NumTravellers + '</td>'
-            + '<td>R' + total + '</td>'
-            + '<td><span class="status-badge ' + statusClass + '">' + b.Status + '</span></td>'
-            + '</tr>';
-    }
-    
-    html += '</tbody></table>';
+
+    var html = '<div class="bookings-list">';
+
+    bookings.forEach(function (b) {
+        var status = (b.Status || b.status || 'pending').toLowerCase();
+        var statusClass = {
+            confirmed: 'status-confirmed',
+            pending: 'status-pending',
+            cancelled: 'status-cancelled'
+        }[status] || 'status-pending';
+
+        var total = parseFloat(b.TotalPrice || b.total_price || 0).toLocaleString('en-ZA');
+
+        html +=
+            '<div class="booking-item" style="display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid var(--border);">' +
+                '<div class="booking-info">' +
+                    '<div style="font-weight:600; font-size:0.9rem;">' + escHtml(b.PackageName || b.package_name) + '</div>' +
+                    '<div style="font-size:0.8rem; color:var(--text-muted); margin-top:3px;">' +
+                        escHtml(b.TravellerName || b.traveller_name) + ' · ' + escHtml(b.TravelDate || b.travel_date) +
+                    '</div>' +
+                '</div>' +
+                '<div style="display:flex; align-items:center; gap:8px;">' +
+                    '<span class="status-badge ' + statusClass + '">' + status + '</span>' +
+                    '<span style="font-weight:600;">R' + total + '</span>' +
+                '</div>' +
+            '</div>';
+    });
+
+    html += '</div>';
     container.innerHTML = html;
 }
 
+// Packages preview
 function loadPackagesPreview() {
     var container = document.getElementById('packages-preview-container');
     if (!container) return;
-    
-    makeRequest({ type: 'GetAgencyPackages', limit: 3 }, function(result) {
-        if (result.status === 'success' && result.data && result.data.length > 0) {
+
+    makeRequest({ type: 'GetAgencyPackages', limit: 3 }, function (result) {
+        if (result.status === 'success' && result.data && result.data.length) {
             displayPackagesPreview(result.data);
         } else {
             container.innerHTML = '<div class="empty-state">No packages yet. <a href="/NanlaPA5/app/travel-agency/package-edit.php">Create your first package</a></div>';
@@ -204,54 +138,24 @@ function loadPackagesPreview() {
 function displayPackagesPreview(packages) {
     var container = document.getElementById('packages-preview-container');
     if (!container) return;
-    
-    var html = '<table class="data-table">'
-        + '<thead>'
-        + '<tr>'
-        + '<th>Package Name</th>'
-        + '<th>Price</th>'
-        + '<th>Duration</th>'
-        + '<th>Bookings</th>'
-        + '<th></th>'
-        + '</tr>'
-        + '</thead><tbody>';
-    
-    for (var i = 0; i < packages.length; i++) {
-        var p = packages[i];
-        var price = parseFloat(p.Price || 0).toLocaleString('en-ZA');
-        var groupIcon = p.Is_Group_Trip ? '👥 ' : '';
-        
-        html += '<tr>'
-            + '<td>' + groupIcon + escHtml(p.Name) + '</td>'
-            + '<td>R' + price + '</td>'
-            + '<td>' + p.Duration + ' days</td>'
-            + '<td>' + (p.BookingCount || 0) + '</td>'
-            + '<td><a href="/NanlaPA5/app/travel-agency/package-edit.php?id=' + p.PackageID + '" class="btn-sm">Edit</a></td>'
-            + '</tr>';
-    }
-    
-    html += '</tbody></table>';
+
+    var html = '<div class="packages-preview-list">';
+
+    packages.forEach(function (p) {
+        var price = parseFloat(p.Price || p.price || 0).toLocaleString('en-ZA');
+        var packageId = p.PackageID || p.package_id;
+        var packageName = p.Name || p.name;
+
+        html +=
+            '<div class="package-preview-item" style="display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--border);">' +
+                '<div>' +
+                    '<div style="font-weight:600;">' + escHtml(packageName) + '</div>' +
+                    '<div style="font-size:0.75rem; color:var(--text-muted);">R' + price + ' · ' + (p.Duration || p.duration || '—') + ' days</div>' +
+                '</div>' +
+                '<a href="/NanlaPA5/app/travel-agency/package-edit.php?id=' + packageId + '" class="btn-outline" style="font-size:0.75rem; padding:4px 10px;">Edit</a>' +
+            '</div>';
+    });
+
+    html += '</div>';
     container.innerHTML = html;
-}
-
-function showSuccess(message) {
-    var successDiv = document.getElementById('profile-success');
-    if (successDiv) {
-        successDiv.innerHTML = '<div class="success-banner">' + message + '</div>';
-        successDiv.style.display = 'block';
-        setTimeout(function() {
-            successDiv.style.display = 'none';
-        }, 3000);
-    }
-}
-
-function showError(message) {
-    var errorDiv = document.getElementById('profile-error');
-    if (errorDiv) {
-        errorDiv.innerHTML = '<div class="error-banner">' + message + '</div>';
-        errorDiv.style.display = 'block';
-        setTimeout(function() {
-            errorDiv.style.display = 'none';
-        }, 3000);
-    }
 }

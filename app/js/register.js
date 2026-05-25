@@ -1,13 +1,21 @@
 function makeRequest(data, callback){
     var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'api.php', true);
+    xhr.open('POST', '/NanlaPA5/app/api.php', true);
     xhr.setRequestHeader('Content-Type', 'application/json');
 
     xhr.onreadystatechange = function(){
         if(xhr.readyState === 4){
             if(xhr.status === 200){
-            var result = JSON.parse(xhr.responseText);
-            callback(result);
+                try {
+                    var result = JSON.parse(xhr.responseText);
+                    callback(result);
+                } catch (e) {
+                    console.error('Response text:', CharacterData.responseText);
+                    callback({
+                        status: 'error',
+                        data: 'Invalid server response '
+                    });
+                }
             } else {
                 callback({
                     status: 'error',
@@ -101,11 +109,13 @@ document.addEventListener('DOMContentLoaded', function(){
                 var surname = '';
                 var dob = '';
                 var passnum = '';
+                var citizenship = '';
 
                 if (user_type === 'Traveller' ) {
                     surname = document.getElementById('surname').value.trim();
-                    dob = document.getElementById('dob').value;
+                    dob = document.getElementById('DOB').value;
                     passnum = document.getElementById('passnum').value.trim();
+                    citizenship = document.getElementById('citizenship').value.trim();
                     
                     if (surname==='') {
                         document.getElementById('surnameError').innerText = 'Please enter your surname';
@@ -126,7 +136,12 @@ document.addEventListener('DOMContentLoaded', function(){
                     if (passnum === '') {
                         document.getElementById('passError').innerText = 'Please enter your passport number';
                         isValid = false;
-                    }                       
+                    }     
+                    
+                    if (citizenship === '') {  
+                        document.getElementById('citizenshipError').innerText = 'Please enter your citizenship';
+                        isValid = false;
+                    }
                 }
 
                 var reg_num = '';
@@ -139,7 +154,7 @@ document.addEventListener('DOMContentLoaded', function(){
                     } else if (isNaN(reg_num)){
                         document.getElementById('reg_Error').innerText = 'Registration number must be a number';
                         isValid = false;
-                    }
+                    } 
                 }
                 if(!user_type){
                     document.getElementById('typeError').innerText = 'Please select a user type';
@@ -194,25 +209,28 @@ document.addEventListener('DOMContentLoaded', function(){
                     apiReq.surname = surname;
                     apiReq.DOB = dob;
                     apiReq.passnum = passnum;
+                    apiReq.citizenship = citizenship;
                 } else if (user_type === 'Travel Agency'){
-                    apiReq.reg_num = reg_num;
+                    apiReq.reg_num = parseInt(reg_num);
                 }
 
-                var submitBtn = document.querySelector('.btn');
-                submitBtn.disabled = true;
+                var submitBtn = document.querySelector('.btn-primary');
+                submitBtn.disabled = false;
                 submitBtn.textContent = 'Registering...';
 
                 makeRequest(apiReq, function(result){
                     if(result.status === 'success'){
+                        console.log('Full response:', result);
                         document.getElementById('apiResponse').innerHTML = 
                         '<div class = "success-message">'+
                             '<p>Registration successful! Redirecting...</p>'+
                         '</div>'
 
                         setTimeout(function() {
-                        window.location.href = 'login.php';
+                        window.location.href = '/NanlaPA5/app/login.php';
                         }, 3000);
                     } else {
+                        console.log('Error message:', result.data);
                         var errorMsg = result.data || 'Registration failed';
                         document.getElementById('apiResponse').innerHTML = 
                         '<div class="error-message">'+

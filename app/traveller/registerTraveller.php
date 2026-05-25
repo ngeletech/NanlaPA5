@@ -33,6 +33,12 @@
                     <span class="error-message" id="passError"></span>
                 </div>
                 <div class="form-group">
+                    <label for="citizenship">Citizenship</label>
+                    <input type="text" id="citizenship" name="citizenship" 
+                        class="form-control" placeholder="e.g. South African, British, etc.">
+                    <span class="error-message" id="citizenshipError"></span>
+                </div>
+                <div class="form-group">
                     <label>Confirm user type</label><br>
                     <input type="radio" name="user_type" value="Traveller" checked> Traveller
                     <input type="radio" name="user_type" value="Travel Agency"> Travel Agency

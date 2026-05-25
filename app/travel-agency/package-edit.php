@@ -15,24 +15,31 @@ require_once '../header.php';
             </div>
             <a href="/NanlaPA5/app/travel-agency/packages.php" class="btn-outline">← Back to packages</a>
         </div>
+        
         <div id="form-error" class="error-banner" style="display:none;"></div>
         <div id="form-success" class="success-banner" style="display:none;"></div>
+        
         <form id="package-form" novalidate>
             <input type="hidden" id="package_id" name="package_id"
                    value="<?= $editMode ? htmlspecialchars($_GET['id']) : '' ?>">
             <input type="hidden" name="action" value="<?= $editMode ? 'update' : 'create' ?>">
+            
+            <!-- Basic details -->
             <div class="form-card">
                 <h2 class="form-section-title">Basic details</h2>
+                
                 <div class="form-group">
                     <label for="package_name">Package name</label>
                     <input type="text" id="package_name" name="package_name" placeholder="e.g. 7 Days in Tuscany">
                     <span class="field-error" id="package_name-error"></span>
                 </div>
+                
                 <div class="form-group">
                     <label for="description">Description</label>
                     <textarea id="description" name="description" placeholder="Describe what travellers can expect..." rows="4"></textarea>
                     <span class="field-error" id="description-error"></span>
                 </div>
+                
                 <div class="form-grid-3">
                     <div class="form-group">
                         <label for="price">Price per person (ZAR)</label>
@@ -49,7 +56,13 @@ require_once '../header.php';
                         <input type="date" id="start_date" name="start_date">
                         <span class="field-error" id="start_date-error"></span>
                     </div>
+                    <div class="form-group">
+                        <label for="end_date">End date</label>
+                        <input type="date" id="end_date" name="end_date" class="form-control">
+                        <span class="field-error" id="end_date-error"></span>
+                    </div>
                 </div>
+                
                 <div class="form-group">
                     <label for="status">Status</label>
                     <select id="status" name="status">
@@ -59,73 +72,79 @@ require_once '../header.php';
                     </select>
                 </div>
             </div>
+            
+            <!-- Destinations -->
             <div class="form-card">
                 <h2 class="form-section-title">Destinations</h2>
                 <div class="item-list" id="destinations-list"></div>
                 <div class="add-row">
-                    <select id="destination-select"><option value="">Loading destinations...</option></select>
+                    <select id="destination-select" class="form-input">
+                        <option value="">Loading destinations...</option>
+                    </select>
                     <button type="button" class="btn-add" onclick="addItem('destination')">+ Add</button>
                 </div>
                 <span class="field-error" id="destinations-error"></span>
             </div>
+            
+            <!-- Flights -->
             <div class="form-card">
                 <h2 class="form-section-title">Flights <span class="optional">optional</span></h2>
                 <div class="item-list" id="flights-list"></div>
                 <div class="add-row">
-                    <select id="flight-select"><option value="">Loading flights...</option></select>
+                    <select id="flight-select" class="form-input">
+                        <option value="">Loading flights...</option>
+                    </select>
                     <button type="button" class="btn-add" onclick="addItem('flight')">+ Add</button>
                 </div>
             </div>
+            
+            <!-- Accommodation -->
             <div class="form-card">
                 <h2 class="form-section-title">Accommodation <span class="optional">optional</span></h2>
                 <div class="item-list" id="accommodations-list"></div>
                 <div class="add-row">
-                    <select id="accommodation-select"><option value="">Loading accommodation...</option></select>
+                    <select id="accommodation-select" class="form-input">
+                        <option value="">Loading accommodation...</option>
+                    </select>
                     <button type="button" class="btn-add" onclick="addItem('accommodation')">+ Add</button>
                 </div>
             </div>
+            
+            <!-- Attractions -->
             <div class="form-card">
                 <h2 class="form-section-title">Attractions <span class="optional">optional</span></h2>
                 <div class="item-list" id="attractions-list"></div>
                 <div class="add-row">
-                    <select id="attraction-select"><option value="">Loading attractions...</option></select>
+                    <select id="attraction-select" class="form-input">
+                        <option value="">Loading attractions...</option>
+                    </select>
                     <button type="button" class="btn-add" onclick="addItem('attraction')">+ Add</button>
                 </div>
             </div>
+            
+            <!-- Restaurants -->
             <div class="form-card">
                 <h2 class="form-section-title">Restaurants <span class="optional">optional</span></h2>
                 <div class="item-list" id="restaurants-list"></div>
                 <div class="add-row">
-                    <select id="restaurant-select"><option value="">Loading restaurants...</option></select>
+                    <select id="restaurant-select" class="form-input">
+                        <option value="">Loading restaurants...</option>
+                    </select>
                     <button type="button" class="btn-add" onclick="addItem('restaurant')">+ Add</button>
                 </div>
             </div>
+            
+            <!-- Max participants -->
             <div class="form-card">
-                <h2 class="form-section-title">Group trip settings</h2>
-                <div class="toggle-row">
-                    <div>
-                        <p class="toggle-label">Enable group trips</p>
-                        <p class="toggle-sub">Allow multiple travellers to join as a group</p>
-                    </div>
-                    <label class="toggle">
-                        <input type="checkbox" id="is_group_trip" name="is_group_trip" onchange="toggleGroupOptions(this)">
-                        <span class="toggle-slider"></span>
-                    </label>
-                </div>
-                <div id="group-options" style="display:none; margin-top:1.25rem">
-                    <div class="form-grid-2">
-                        <div class="form-group">
-                            <label for="max_participants">Max participants</label>
-                            <input type="number" id="max_participants" name="max_participants" placeholder="e.g. 20" min="2">
-                            <span class="field-error" id="max_participants-error"></span>
-                        </div>
-                        <div class="form-group">
-                            <label for="group_trip_date">Group trip date</label>
-                            <input type="date" id="group_trip_date" name="group_trip_date">
-                        </div>
-                    </div>
+                <h2 class="form-section-title">Capacity</h2>
+                <div class="form-group">
+                    <label for="max_participants">Max participants</label>
+                    <input type="number" id="max_participants" name="max_participants" placeholder="e.g. 20" min="2" value="10">
+                    <span class="field-error" id="max_participants-error"></span>
                 </div>
             </div>
+            
+            <!-- Submit -->
             <div class="form-actions">
                 <a href="/NanlaPA5/app/travel-agency/packages.php" class="btn-outline">Cancel</a>
                 <button type="submit" class="btn-primary" id="submit-btn">
@@ -138,6 +157,6 @@ require_once '../header.php';
 </main>
 
 <?php
-$pageScript = '/NanlaPA5/app/js/agency/package-edit.js';
+$pageScript = '/NanlaPA5/app/js/travel-agency/package-edit.js';
 require_once '../footer.php';
 ?>

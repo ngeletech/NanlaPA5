@@ -1,109 +1,114 @@
-// browse.js - Display and filter packages
-document.addEventListener('DOMContentLoaded', function() {
+var allPackages = [];
+
+document.addEventListener('DOMContentLoaded', function () {
     loadPackages();
-    
-    // Set up event listeners
-    var applyBtn = document.getElementById('apply-filters');
-    if (applyBtn) {
-        applyBtn.addEventListener('click', loadPackages);
-    }
-    
-    var sortBy = document.getElementById('sort-by');
-    if (sortBy) {
-        sortBy.addEventListener('change', loadPackages);
-    }
-    
-    var clearBtn = document.getElementById('clear-filters');
-    if (clearBtn) {
-        clearBtn.addEventListener('click', function() {
-            document.getElementById('filter-destination').value = '';
-            document.getElementById('filter-price-min').value = '';
-            document.getElementById('filter-price-max').value = '';
-            document.getElementById('filter-duration-min').value = '';
-            document.getElementById('filter-duration-max').value = '';
-            document.getElementById('filter-rating').value = '';
-            var groupCheckbox = document.getElementById('filter-group-trips');
-            if (groupCheckbox) groupCheckbox.checked = false;
-            loadPackages();
-        });
-    }
+
+    document.getElementById('apply-filters').addEventListener('click', applyFilters);
+    document.getElementById('sort-by').addEventListener('change', applyFilters);
+
+    document.getElementById('clear-filters').addEventListener('click', function () {
+        document.getElementById('filter-destination').value = '';
+        document.getElementById('filter-price-min').value = '';
+        document.getElementById('filter-price-max').value = '';
+        document.getElementById('filter-duration-min').value  = '';
+        document.getElementById('filter-duration-max').value  = '';
+        document.getElementById('filter-rating').value = '';
+        document.getElementById('filter-group-trips').checked = false;
+        document.getElementById('filter-agency').value = '';
+        applyFilters();
+    });
 });
 
 function loadPackages() {
     var container = document.getElementById('packages-container');
-    var resultsCount = document.getElementById('results-count');
-    var noResults = document.getElementById('no-results');
-    
-    if (!container) return;
-    
     container.innerHTML = '<div class="loading">Loading packages...</div>';
-    if (resultsCount) resultsCount.textContent = 'Loading...';
-    if (noResults) noResults.style.display = 'none';
-    
-    var destination = document.getElementById('filter-destination') ? 
-        document.getElementById('filter-destination').value.trim() : '';
-    var minPrice = document.getElementById('filter-price-min') ? 
-        document.getElementById('filter-price-min').value : '';
-    var maxPrice = document.getElementById('filter-price-max') ? 
-        document.getElementById('filter-price-max').value : '';
-    var groupOnly = document.getElementById('filter-group-trips') ? 
-        (document.getElementById('filter-group-trips').checked ? 1 : 0) : 0;
-    var sort = document.getElementById('sort-by') ? 
-        document.getElementById('sort-by').value : 'price_asc';
-    
-    var requestData = {
-        type: 'GetPackages',
-        destination: destination,
-        min_price: minPrice,
-        max_price: maxPrice,
-        group_only: groupOnly,
-        sort: sort
-    };
-    
-    makeRequest(requestData, function(result) {
-        if (result.status === 'success' && result.data && result.data.length > 0) {
-            if (resultsCount) {
-                resultsCount.textContent = result.data.length + ' packages found';
-            }
-            displayPackages(result.data);
+
+    makeRequest({ type: 'GetPackages' }, function (result) {
+        if (result.status === 'success' && result.data && result.data.length) {
+            allPackages = result.data;
+            populateAgencyFilter();
+            applyFilters();
         } else {
             container.innerHTML = '';
-            if (noResults) noResults.style.display = 'block';
-            if (resultsCount) resultsCount.textContent = '0 packages found';
+            document.getElementById('no-results').style.display  = 'block';
+            document.getElementById('results-count').textContent = '0 packages found';
         }
     });
 }
 
-function displayPackages(packages) {
-    var container = document.getElementById('packages-container');
-    if (!container) return;
-    
-    var html = '<div class="pkg-grid">';
-    
-    for (var i = 0; i < packages.length; i++) {
-        var pkg = packages[i];
-        var rating = parseFloat(pkg.AvgRating || 0).toFixed(1);
-        var reviewCount = pkg.ReviewCount || 0;
-        var price = parseFloat(pkg.Price || 0).toLocaleString('en-ZA');
-        var groupBadge = pkg.Is_Group_Trip ? '<span class="group-badge">👥 Group Trip</span>' : '';
-        
-        html += '<div class="pkg-card">';
-        html += '<div class="pkg-image">✈️</div>';
-        html += '<div class="pkg-body">';
-        html += '<div class="pkg-agency">' + escHtml(pkg.AgencyName) + '</div>';
-        html += '<h3 class="pkg-name">' + escHtml(pkg.Name) + '</h3>';
-        html += '<div class="pkg-meta">';
-        html += '<span>📅 ' + pkg.Duration + ' days</span>';
-        html += groupBadge;
-        html += '</div>';
-        html += '<div class="pkg-footer">';
-        html += '<div class="pkg-price">R' + price + ' <small>/ person</small></div>';
-        html += '<div class="pkg-rating">★ ' + rating + ' (' + reviewCount + ' reviews)</div>';
-        html += '</div>';
-        html += '<a href="/NanlaPA5/app/traveller/package-details.php?id=' + pkg.PackageID + '" class="btn-primary btn-block">View Details</a>';
-        html += '</div></div>';
+function populateAgencyFilter() {
+    var select = document.getElementById('filter-agency');
+    var seen   = {};
+    allPackages.forEach(function (pkg) {
+        var name = pkg.Agency_Name || pkg.AgencyName || '';
+        if (name && !seen[name]) {
+            seen[name] = true;
+            var opt = document.createElement('option');
+            opt.value = name;
+            opt.textContent = name;
+            select.appendChild(opt);
+        }
+    });
+}
+
+function applyFilters() {
+    var destination  = document.getElementById('filter-destination').value.trim().toLowerCase();
+    var minPrice = parseFloat(document.getElementById('filter-price-min').value)  || 0;
+    var maxPrice = parseFloat(document.getElementById('filter-price-max').value)  || Infinity;
+    var minDuration  = parseInt(document.getElementById('filter-duration-min').value) || 0;
+    var maxDuration  = parseInt(document.getElementById('filter-duration-max').value) || Infinity;
+    var minRating = parseFloat(document.getElementById('filter-rating').value)     || 0;
+    var groupOnly = document.getElementById('filter-group-trips').checked;
+    var agencyFilter = document.getElementById('filter-agency').value;
+    var sort = document.getElementById('sort-by').value;
+
+    var filtered = allPackages.filter(function (pkg) {
+        if (destination) {
+            var haystack = [
+                (pkg.Name || '').toLowerCase(),
+                (pkg.Description || '').toLowerCase(),
+                (pkg.Agency_Name || '').toLowerCase()
+            ].join(' ');
+            if (!haystack.includes(destination)) return false;
+        }
+        if (parseFloat(pkg.Price) < minPrice) return false;
+        if (parseFloat(pkg.Price) > maxPrice) return false;
+        if (parseInt(pkg.Duration) < minDuration) return false;
+        if (parseInt(pkg.Duration) > maxDuration) return false;
+        if (parseFloat(pkg.AvgRating || 0) < minRating) return false;
+        if (groupOnly && !pkg.Is_Group_Trip) return false;
+        if (agencyFilter && (pkg.Agency_Name || pkg.AgencyName) !== agencyFilter) return false;
+        return true;
+    });
+
+    filtered.sort(function (a, b) {
+        switch (sort) {
+            case 'price_asc':    return parseFloat(a.Price)          - parseFloat(b.Price);
+            case 'price_desc':   return parseFloat(b.Price)          - parseFloat(a.Price);
+            case 'rating_desc':  return parseFloat(b.AvgRating || 0) - parseFloat(a.AvgRating || 0);
+            case 'duration_asc': return parseInt(a.Duration)         - parseInt(b.Duration);
+            case 'duration_desc':return parseInt(b.Duration)         - parseInt(a.Duration);
+            default: return 0;
+        }
+    });
+
+    var noEl = document.getElementById('no-results');
+    var countEl = document.getElementById('results-count');
+
+    if (!filtered.length) {
+        document.getElementById('packages-container').innerHTML = '';
+        noEl.style.display  = 'block';
+        countEl.textContent = '0 packages found';
+        return;
     }
-    
-    html += '</div>';
-    container.innerHTML = html;
+
+    noEl.style.display  = 'none';
+    countEl.textContent = filtered.length + ' package(s) found';
+    displayPackages(filtered);
+}
+
+function displayPackages(packages) {
+    document.getElementById('packages-container').innerHTML = packages.map(function (pkg) {
+        return buildPackageCard(pkg, { showCompare: false });
+    }).join('');
 }

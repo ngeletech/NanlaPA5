@@ -1,147 +1,260 @@
-let allTrips = [];
+// group-trips.js - Agency manage group trips
+
+var allTrips = [];
 
 document.addEventListener('DOMContentLoaded', function () {
-    loadStats();
     loadGroupTrips();
+    loadPackagesDropdown();
+    loadTravellersDropdown();
 
-    document.getElementById('search-trips').addEventListener('input',         renderTrips);
-    document.getElementById('filter-trip-status').addEventListener('change',  renderTrips);
+    var searchInput = document.getElementById('search-trips');
+    if (searchInput) {
+        searchInput.addEventListener('keyup', filterTrips);
+    }
 
-    document.getElementById('participants-modal').addEventListener('click', function (e) {
-        if (e.target === this) closeParticipantsModal();
-    });
+    var statusFilter = document.getElementById('filter-trip-status');
+    if (statusFilter) {
+        statusFilter.addEventListener('change', filterTrips);
+    }
 });
 
-function loadStats() {
-    fetch('/api/packages.php?action=group_trip_stats')
-        .then(res => res.json())
-        .then(data => {
-            if (!data.success) return;
-            document.getElementById('stat-total-trips').textContent        = data.total        ?? '—';
-            document.getElementById('stat-open-trips').textContent         = data.open         ?? '—';
-            document.getElementById('stat-total-participants').textContent  = data.participants ?? '—';
-        })
-        .catch(() => {});
-}
+// ── Load group trips ──────────────────────────────────────────
 
 function loadGroupTrips() {
-    fetch('/api/packages.php?action=group_trips')
-        .then(res => res.json())
-        .then(data => {
-            if (!data.success || !data.trips.length) {
-                showEmpty();
-                return;
-            }
-            allTrips = data.trips;
-            renderTrips();
-        })
-        .catch(() => showEmpty());
+    var container = document.getElementById('group-trips-container');
+    if (!container) return;
+
+    container.innerHTML = '<div class="loading">Loading group trips...</div>';
+
+    makeRequest({ type: 'GetAgencyGroupTrips' }, function (result) {
+        if (result.status === 'success' && result.data && result.data.length) {
+            allTrips = result.data;
+            updateStats(allTrips);
+            renderTripsTable(allTrips);
+        } else {
+            container.innerHTML = '';
+            var noTrips = document.getElementById('no-trips');
+            if (noTrips) noTrips.style.display = 'block';
+            updateStats([]);
+        }
+    });
 }
 
-function renderTrips() {
-    const search = document.getElementById('search-trips').value.toLowerCase();
-    const status = document.getElementById('filter-trip-status').value;
+function loadPackagesDropdown() {
+    var select = document.getElementById('gt-package-select');
+    if (!select) return;
 
-    const filtered = allTrips.filter(t => {
-        const matchSearch = !search || t.package_name.toLowerCase().includes(search);
-        const matchStatus = !status || t.trip_status === status;
-        return matchSearch && matchStatus;
+    makeRequest({ type: 'GetAgencyPackages' }, function (result) {
+        if (result.status !== 'success' || !result.data) return;
+
+        select.innerHTML = '<option value="">Select a package...</option>';
+        for (var i = 0; i < result.data.length; i++) {
+            var pkg = result.data[i];
+            var option = document.createElement('option');
+            option.value = pkg.PackageID;
+            option.textContent = pkg.Name;
+            select.appendChild(option);
+        }
     });
+}
 
-    const container = document.getElementById('group-trips-container');
-    const emptyEl   = document.getElementById('no-trips');
+function loadTravellersDropdown() {
+    var select = document.getElementById('gt-traveller');
+    if (!select) return;
 
-    if (!filtered.length) {
-        container.innerHTML   = allTrips.length
-            ? '<p class="t-loading" style="padding:2rem">No trips match your search.</p>'
-            : '';
-        emptyEl.style.display = allTrips.length ? 'none' : 'block';
+    makeRequest({ type: 'GetAllTravellers' }, function (result) {
+        if (result.status !== 'success' || !result.data) return;
+
+        select.innerHTML = '<option value="">Select a traveller...</option>';
+        for (var i = 0; i < result.data.length; i++) {
+            var traveller = result.data[i];
+            var option = document.createElement('option');
+            option.value = traveller.UserID;
+            option.textContent = traveller.First_Name + ' ' + traveller.Last_Name;
+            select.appendChild(option);
+        }
+    });
+}
+
+// ── Update stats ──────────────────────────────────────────────
+
+function updateStats(trips) {
+    var totalEl = document.getElementById('stat-total-trips');
+    var openEl = document.getElementById('stat-open-trips');
+    var participantsEl = document.getElementById('stat-total-participants');
+
+    if (totalEl) totalEl.textContent = trips.length;
+
+    var openCount = 0;
+    for (var i = 0; i < trips.length; i++) {
+        if (trips[i].Status === 'open') openCount++;
+    }
+    if (openEl) openEl.textContent = openCount;
+
+    var totalParticipants = 0;
+    for (var i = 0; i < trips.length; i++) {
+        totalParticipants += parseInt(trips[i].ParticipantCount) || 1;
+    }
+    if (participantsEl) participantsEl.textContent = totalParticipants;
+}
+
+// ── Render table ──────────────────────────────────────────────
+
+function renderTripsTable(trips) {
+    var container = document.getElementById('group-trips-container');
+    var noTrips = document.getElementById('no-trips');
+
+    if (!container) return;
+
+    if (!trips || !trips.length) {
+        container.innerHTML = '';
+        if (noTrips) noTrips.style.display = 'block';
         return;
     }
 
-    emptyEl.style.display = 'none';
-    container.innerHTML = `
-        <table class="a-table">
-            <thead>
-                <tr>
-                    <th>Package</th>
-                    <th>Trip date</th>
-                    <th>Participants</th>
-                    <th>Max</th>
-                    <th>Spots left</th>
-                    <th>Status</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                ${filtered.map(buildTripRow).join('')}
-            </tbody>
-        </table>
-    `;
+    if (noTrips) noTrips.style.display = 'none';
+
+    var html = '<table class="data-table">' +
+        '<thead>' +
+        '<tr>' +
+        '<th>Group ID</th>' +
+        '<th>Package</th>' +
+        '<th>Traveller</th>' +
+        '<th>Status</th>' +
+        '<th>Actions</th>' +
+        '</tr>' +
+        '</thead><tbody>';
+
+    for (var i = 0; i < trips.length; i++) {
+        var trip = trips[i];
+        var statusClass = 'status-' + (trip.Status || 'open').toLowerCase();
+
+        html += '<tr>' +
+            '<td>#' + trip.GroupID + '</td>' +
+            '<td>' + escHtml(trip.PackageName || '—') + '</td>' +
+            '<td>' + escHtml(trip.TravellerName || '—') + '</td>' +
+            '<td><span class="status-badge ' + statusClass + '">' + escHtml(trip.Status || 'Open') + '</span></td>' +
+            '<td>' +
+            '<button class="btn-outline" style="font-size:12px; padding:5px 10px;" onclick="editGroupTrip(' + trip.GroupID + ', ' + trip.PackageID + ', ' + trip.TravellerID + ')">Edit</button> ' +
+            '<button class="btn-danger" style="font-size:12px; padding:5px 10px;" onclick="deleteGroupTrip(' + trip.GroupID + ')">Delete</button>' +
+            '</td>' +
+        '</tr>';
+    }
+
+    html += '</tbody></table>';
+    container.innerHTML = html;
 }
 
-function buildTripRow(trip) {
-    const spotsLeft   = trip.max_participants - trip.participant_count;
-    const statusClass = {
-        open:   'a-badge-active',
-        full:   'a-badge-draft',
-        closed: 'a-badge-inactive'
-    }[trip.trip_status] || 'a-badge-inactive';
+// ── Filter ────────────────────────────────────────────────────
 
-    return `
-        <tr>
-            <td><span class="a-pkg-name">${escHtml(trip.package_name)}</span></td>
-            <td>${escHtml(trip.group_trip_date || '—')}</td>
-            <td>${trip.participant_count}</td>
-            <td>${trip.max_participants}</td>
-            <td>${spotsLeft > 0 ? spotsLeft : '<span style="color:var(--error)">Full</span>'}</td>
-            <td><span class="a-badge ${statusClass}">${escHtml(trip.trip_status)}</span></td>
-            <td>
-                <button class="a-btn-icon"
-                        onclick="openParticipantsModal(${trip.group_id}, '${escHtml(trip.package_name)}')">
-                    View participants
-                </button>
-            </td>
-        </tr>
-    `;
+function filterTrips() {
+    var search = document.getElementById('search-trips') ?
+        document.getElementById('search-trips').value.toLowerCase() : '';
+    var status = document.getElementById('filter-trip-status') ?
+        document.getElementById('filter-trip-status').value : '';
+
+    var filtered = [];
+    for (var i = 0; i < allTrips.length; i++) {
+        var trip = allTrips[i];
+        var matchesSearch = search === '' ||
+            (trip.PackageName && trip.PackageName.toLowerCase().indexOf(search) !== -1);
+        var matchesStatus = status === '' || (trip.Status || 'open').toLowerCase() === status;
+        if (matchesSearch && matchesStatus) {
+            filtered.push(trip);
+        }
+    }
+
+    renderTripsTable(filtered);
 }
 
-function openParticipantsModal(groupId, packageName) {
-    document.getElementById('participants-modal-title').textContent =
-        'Participants — ' + packageName;
-    document.getElementById('participants-list').innerHTML =
-        '<div class="t-loading">Loading...</div>';
-    document.getElementById('participants-modal').style.display = 'flex';
+// ── Modal functions ───────────────────────────────────────────
 
-    fetch('/api/packages.php?action=group_participants&group_id=' + encodeURIComponent(groupId))
-        .then(res => res.json())
-        .then(data => {
-            const list = document.getElementById('participants-list');
-            if (!data.success || !data.participants.length) {
-                list.innerHTML = '<p style="color:var(--text-muted); font-size:0.875rem">No participants yet.</p>';
-                return;
+var editingGroupId = null;
+
+function openCreateModal() {
+    editingGroupId = null;
+    document.getElementById('gt-modal-title').textContent = 'Create group trip';
+    document.getElementById('gt-package-select').value = '';
+    document.getElementById('gt-traveller').value = '';
+    document.getElementById('gt-modal').style.display = 'flex';
+}
+
+function editGroupTrip(groupId, packageId, travellerId) {
+    editingGroupId = groupId;
+    document.getElementById('gt-modal-title').textContent = 'Edit group trip';
+    document.getElementById('gt-package-select').value = packageId;
+    document.getElementById('gt-traveller').value = travellerId;
+    document.getElementById('gt-modal').style.display = 'flex';
+}
+
+function closeGroupTripModal() {
+    var modal = document.getElementById('gt-modal');
+    if (modal) modal.style.display = 'none';
+    editingGroupId = null;
+}
+
+function saveGroupTrip() {
+    var packageId = document.getElementById('gt-package-select').value;
+    var travellerId = document.getElementById('gt-traveller').value;
+
+    if (!packageId) { alert('Please select a package'); return; }
+    if (!travellerId) { alert('Please select a traveller'); return; }
+
+    var requestData = {
+        type: editingGroupId ? 'UpdateGroupTrip' : 'CreateGroupTrip',
+        group_trip_id: editingGroupId,
+        package_id: parseInt(packageId),
+        traveller_id: parseInt(travellerId)
+    };
+
+    makeRequest(requestData, function (result) {
+        if (result.status === 'success') {
+            closeGroupTripModal();
+            var successDiv = document.getElementById('gt-success');
+            if (successDiv) {
+                successDiv.textContent = editingGroupId ? 'Group trip updated successfully.' : 'Group trip created successfully.';
+                successDiv.style.display = 'block';
+                setTimeout(function() {
+                    successDiv.style.display = 'none';
+                }, 3000);
             }
-            list.innerHTML = data.participants.map(p => `
-                <div class="t-booking-item" style="padding:0.75rem 1rem; margin-bottom:0.5rem">
-                    <div>
-                        <strong style="font-size:0.875rem">${escHtml(p.first_name + ' ' + p.last_name)}</strong>
-                        <p style="font-size:0.78rem; color:var(--text-muted)">${escHtml(p.email)}</p>
-                    </div>
-                    <span style="font-size:0.78rem; color:var(--text-muted)">${escHtml(p.join_date)}</span>
-                </div>
-            `).join('');
-        })
-        .catch(() => {
-            document.getElementById('participants-list').innerHTML =
-                '<p style="color:var(--error); font-size:0.875rem">Could not load participants.</p>';
-        });
+            loadGroupTrips();
+        } else {
+            var errorDiv = document.getElementById('gt-error');
+            if (errorDiv) {
+                errorDiv.textContent = result.data || 'Failed to save group trip.';
+                errorDiv.style.display = 'block';
+                setTimeout(function() {
+                    errorDiv.style.display = 'none';
+                }, 3000);
+            }
+        }
+    });
 }
 
-function closeParticipantsModal() {
-    document.getElementById('participants-modal').style.display = 'none';
-}
+function deleteGroupTrip(groupId) {
+    if (!confirm('Are you sure you want to delete this group trip? This cannot be undone.')) return;
 
-function showEmpty() {
-    document.getElementById('group-trips-container').innerHTML = '';
-    document.getElementById('no-trips').style.display          = 'block';
+    makeRequest({ type: 'DeleteGroupTrip', group_trip_id: groupId }, function (result) {
+        if (result.status === 'success') {
+            var successDiv = document.getElementById('gt-success');
+            if (successDiv) {
+                successDiv.textContent = 'Group trip deleted.';
+                successDiv.style.display = 'block';
+                setTimeout(function() {
+                    successDiv.style.display = 'none';
+                }, 3000);
+            }
+            loadGroupTrips();
+        } else {
+            var errorDiv = document.getElementById('gt-error');
+            if (errorDiv) {
+                errorDiv.textContent = result.data || 'Failed to delete.';
+                errorDiv.style.display = 'block';
+                setTimeout(function() {
+                    errorDiv.style.display = 'none';
+                }, 3000);
+            }
+        }
+    });
 }

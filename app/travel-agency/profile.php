@@ -23,7 +23,9 @@ require_once '../header.php';
                     </div>
                     <div id="profile-error" class="error-banner" style="display:none;"></div>
                     <div id="profile-success" class="success-banner" style="display:none;"></div>
-                    <div id="profile-container"><div class="loading">Loading profile...</div></div>
+                    <div class="form-card" id="profile-container">
+                        <div class="loading">Loading profile...</div>
+                    </div>
                 </div>
             </div>
             <div class="col col-dashboard">
@@ -37,18 +39,14 @@ require_once '../header.php';
                     <div class="section-header">
                         <h2 class="section-title">Recent bookings</h2>
                     </div>
-                    <div class="table-wrapper" id="recent-bookings-container">
-                        <div class="loading">Loading bookings...</div>
-                    </div>
+                    <div id="recent-bookings-container"><div class="loading">Loading bookings...</div></div>
                 </div>
                 <div class="section">
                     <div class="section-header">
                         <h2 class="section-title">My packages</h2>
                         <a href="/NanlaPA5/app/travel-agency/packages.php" class="link">View all →</a>
                     </div>
-                    <div class="table-wrapper" id="packages-preview-container">
-                        <div class="loading">Loading packages...</div>
-                    </div>
+                    <div id="packages-preview-container"><div class="loading">Loading packages...</div></div>
                 </div>
             </div>
         </div>
@@ -56,6 +54,6 @@ require_once '../header.php';
 </main>
 
 <?php
-$pageScript = '/NanlaPA5/app/js/agency/profile.js';
+$pageScript = '/NanlaPA5/app/js/travel-agency/profile.js';
 require_once '../footer.php';
 ?>

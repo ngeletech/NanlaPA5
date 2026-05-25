@@ -17,7 +17,7 @@
                 </div>
                 <div class="form-group">
                     <label for="reg_num">Registration number</label>
-                    <input type="text" id="reg_num" name="reg_num">
+                    <input type="number" id="reg_num" name="reg_num">
                     <span class="error-message" id="reg_Error"></span>
                 </div>
                 <div class="form-group">
