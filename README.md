@@ -106,8 +106,7 @@ Navela did task 3 which is the relational mapping. He also did half of the backe
 
 3\. Open your browser and go to:
 
-&#x20;  http://localhost/tripistry
-
+&#x20;  http://localhost/tripistry or specifically to this project http://localhost/NanlaPA5/app/login.php
 
 
 
